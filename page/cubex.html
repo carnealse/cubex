@@ -180,14 +180,10 @@
         </div>
     </div>
 
+    <script src="cubex_dictionary.js"></script>
     <script>
         const letters = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSSSTTTTTTUUUUVVWWXYYZ";
         let selectedStickers = [];
-
-        // --- WORDLE-STYLE CLIENT EMBEDDED DICTIONARY ---
-        // Expand this comma-separated string directly to include up to 150,000 words.
-        const rawDictionary = "PIT,CUBE,WORD,PLAY,GAME,RUBIK,WEB,STACK,AMPLITUDE,ALGORITHM,BACKEND,DEVELOPER,ELASTIC,FRAMEWORK,FUNCTION,GRID,INDEX,JAVASCRIPT,KIBANA,LOGSTASH,MATRIX,NODE,OBJECT,PIPELINE,QUERY,REACT,TRANSFORM,VARIABLE,DICTIONARY,ARCHITECTURE,CONNECTIVITY";
-        const wordSet = new Set(rawDictionary.split(','));
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -315,7 +311,7 @@
                 return;
             }
 
-            if (wordSet.has(currentWord)) {
+            if (wordSet.has(currentWord.toUpperCase())) {
                 showMessage(`Valid 3D Word: ${currentWord}!`, "#2ed573");
                 selectedStickers.forEach(s => {
                     s.classList.remove('selected');
