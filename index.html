@@ -26,7 +26,7 @@
 
         .ui-container {
             position: absolute;
-            bottom: 40px;
+            bottom: 80px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -90,7 +90,7 @@
             position: relative;
             width: 460px;
             height: 460px;
-            margin-bottom: 100px;
+            margin-bottom: 150px;
         }
 
         .scene {
@@ -135,14 +135,11 @@
         }
 
         .reset-view-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            z-index: 25;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
-            padding: 8px 12px;
+            padding: 10px 18px;
             border: 1px solid #333;
             border-radius: 6px;
             background: rgba(0, 0, 0, 0.8);
@@ -153,6 +150,7 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
             transition: background 0.2s, border-color 0.2s;
+            flex: none;
         }
 
         .reset-view-btn:hover {
@@ -257,9 +255,6 @@
     <div class="message" id="message">Drag to spin the view. Press R or Reset to return to the starting angle.</div>
 
     <div class="cube-stage">
-        <button type="button" class="reset-view-btn" id="reset-view-btn" title="Reset view to starting angle (R)">
-            Reset <kbd>R</kbd>
-        </button>
         <div class="rotate-controls" id="rotate-controls" aria-label="Cube rotation controls"></div>
         <div class="scene">
             <div class="cube" id="cube">
@@ -279,6 +274,9 @@
             <button class="btn-clear" onclick="clearSelection()">Clear</button>
             <button class="btn-submit" onclick="submitWord()">Submit</button>
         </div>
+        <button type="button" class="reset-view-btn" id="reset-view-btn" title="Reset view to starting angle (R)">
+            Reset <kbd>R</kbd>
+        </button>
     </div>
 
     <script src="cubex_dictionary.js"></script>
@@ -725,8 +723,7 @@
 
         function isStickerFacingCamera(sticker) {
             const face = sticker.dataset.face;
-            const idx = Number(sticker.dataset.index);
-            const view = viewTransform(slotPos(face, idx), currentRotation.x, currentRotation.y);
+            const view = viewTransform(FACE_BASIS[face].n, currentRotation.x, currentRotation.y);
             return view.z > 0.05;
         }
 
