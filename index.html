@@ -134,6 +134,48 @@
             transform: translate(-50%, -50%) scale(1.2);
         }
 
+        .reset-view-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 25;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .reset-view-btn:hover {
+            background: rgba(30, 30, 30, 0.95);
+            border-color: #555;
+        }
+
+        .reset-view-btn kbd {
+            display: inline-block;
+            min-width: 1.5rem;
+            padding: 2px 6px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #ffd43b;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 700;
+            line-height: 1.2;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
         .cube {
             width: 100%;
             height: 100%;
@@ -212,9 +254,12 @@
 </head>
 <body>
 
-    <div class="message" id="message">Drag to spin the view. Hover arrows — the glow chases in the direction of the turn.</div>
+    <div class="message" id="message">Drag to spin the view. Press R or Reset to return to the starting angle.</div>
 
     <div class="cube-stage">
+        <button type="button" class="reset-view-btn" id="reset-view-btn" title="Reset view to starting angle (R)">
+            Reset <kbd>R</kbd>
+        </button>
         <div class="rotate-controls" id="rotate-controls" aria-label="Cube rotation controls"></div>
         <div class="scene">
             <div class="cube" id="cube">
@@ -246,7 +291,8 @@
         let selectedStickers = [];
         let suppressClickAfterDrag = false;
         let isLayerRotating = false;
-        let currentRotation = { x: -25, y: 45 };
+        const DEFAULT_ROTATION = { x: -25, y: 45 };
+        let currentRotation = { ...DEFAULT_ROTATION };
         const STAGE_SIZE = 460;
         const SCENE_OFFSET = 125;
         const ARROW_INSET = 4;
@@ -1065,6 +1111,34 @@
         let previousPointer = { x: 0, y: 0 };
         const DRAG_CLICK_THRESHOLD = 5;
 
+        function applyCubeRotation() {
+            cube.style.transform = `rotateX(${currentRotation.x}deg) rotateY(${currentRotation.y}deg)`;
+        }
+
+        function resetCubeRotation() {
+            currentRotation = { ...DEFAULT_ROTATION };
+            applyCubeRotation();
+            clearSlicePreview();
+        }
+
+        document.getElementById('reset-view-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetCubeRotation();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) {
+                return;
+            }
+            if (e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+                return;
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                resetCubeRotation();
+            }
+        });
+
         function beginDrag(clientX, clientY) {
             isDragging = true;
             dragDistance = 0;
@@ -1085,7 +1159,7 @@
             }
             currentRotation.y += deltaMove.x * 0.4;
             currentRotation.x -= deltaMove.y * 0.4;
-            cube.style.transform = `rotateX(${currentRotation.x}deg) rotateY(${currentRotation.y}deg)`;
+            applyCubeRotation();
             previousPointer = { x: clientX, y: clientY };
         }
 
@@ -1094,7 +1168,7 @@
         }
 
         window.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.rotate-btn') || isLayerRotating) return;
+            if (e.target.closest('.rotate-btn, .reset-view-btn') || isLayerRotating) return;
             beginDrag(e.clientX, e.clientY);
         });
         window.addEventListener('mousemove', (e) => updateDrag(e.clientX, e.clientY));
