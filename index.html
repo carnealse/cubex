@@ -198,34 +198,6 @@
         .color-red    { background-color: #b71234; }
         .color-orange { background-color: #ff5800; }
 
-        .slice-rotator {
-            position: absolute;
-            inset: 0;
-            transform-style: preserve-3d;
-            transform-origin: center center;
-            pointer-events: none;
-            transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .slice-sticker {
-            position: absolute;
-            width: 62px;
-            height: 62px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #000000;
-            text-transform: uppercase;
-            transform-style: preserve-3d;
-            backface-visibility: hidden;
-        }
-
-        .sticker.layer-hidden {
-            visibility: hidden;
-        }
     </style>
 </head>
 <body>
@@ -268,17 +240,6 @@
         const STAGE_SIZE = 460;
         const SCENE_OFFSET = 125;
         const ARROW_INSET = 4;
-        const CELL_STEP = 68;
-        const SLICE_ANIM_MS = 380;
-
-        const FACE_TRANSFORMS = {
-            front: 'rotateY(0deg) translateZ(105px)',
-            back: 'rotateY(180deg) translateZ(105px)',
-            right: 'rotateY(90deg) translateZ(105px)',
-            left: 'rotateY(-90deg) translateZ(105px)',
-            top: 'rotateX(90deg) translateZ(105px)',
-            bottom: 'rotateX(-90deg) translateZ(105px)'
-        };
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -321,7 +282,7 @@
             }
         };
 
-        // --- RUBIK LAYER ROTATION ENGINE (3D slice physics) ---
+        // --- RUBIK LAYER ROTATION ENGINE ---
         const FACE_NORMALS = {
             front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0],
             left: [-1, 0, 0], top: [0, -1, 0], bottom: [0, 1, 0]
@@ -415,20 +376,6 @@
             return { x, y: y1, z };
         }
 
-        function getScreenDirection3D(screenX, screenY) {
-            const rx = -currentRotation.x * Math.PI / 180;
-            const ry = -currentRotation.y * Math.PI / 180;
-            let x = screenX;
-            let y = screenY;
-            let z = 0;
-            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
-            z = y * Math.sin(rx) + z * Math.cos(rx);
-            y = y1;
-            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-            z = -x * Math.sin(ry) + z * Math.cos(ry);
-            return [x1, y, z];
-        }
-
         function getDominantFace() {
             let dominant = 'front';
             let bestZ = -Infinity;
@@ -442,17 +389,21 @@
             return dominant;
         }
 
-        function resolveAngleSign(kind, screenDir, dominant) {
+        function resolveAngleSign(kind, line, screenDir, dominant) {
             const basis = FACE_BASIS[dominant];
             const rotAxis = kind === 'col' ? basis.r : basis.u;
-            const moveDir = kind === 'col' ? basis.u : basis.r;
-            const rotated = rotateAroundAxis(moveDir, rotAxis, Math.PI / 2);
-            const screenVec = kind === 'col'
-                ? getScreenDirection3D(0, screenDir === 'up' ? -1 : 1)
-                : getScreenDirection3D(screenDir === 'right' ? 1 : -1, 0);
-            const positiveMatches = vecDot(rotated, screenVec) >= 0;
-            const wantPositive = screenDir === 'up' || screenDir === 'right';
-            return positiveMatches === wantPositive ? 1 : -1;
+            const layerVal = kind === 'col' ? line - 1 : 1 - line;
+            const screenX = kind === 'col' ? 0 : (screenDir === 'right' ? 1 : -1);
+            const screenY = kind === 'col' ? (screenDir === 'up' ? -1 : 1) : 0;
+            const testIdx = kind === 'col' ? layerVal + 1 + 3 : (1 - layerVal) * 3 + 1;
+            const testPos = slotPos(dominant, testIdx);
+            const startView = transformVector(testPos, currentRotation.x, currentRotation.y);
+            const score = (sign) => {
+                const endPos = rotateAroundAxis(testPos, rotAxis, sign * Math.PI / 2);
+                const endView = transformVector(endPos, currentRotation.x, currentRotation.y);
+                return (endView.x - startView.x) * screenX + (endView.y - startView.y) * screenY;
+            };
+            return score(1) >= score(-1) ? 1 : -1;
         }
 
         function computeLayerMove(kind, line, screenDir, dominant) {
@@ -460,7 +411,7 @@
             const rotAxis = kind === 'col' ? basis.r : basis.u;
             const layerAxis = kind === 'col' ? basis.r : basis.u;
             const layerVal = kind === 'col' ? line - 1 : 1 - line;
-            const angleSign = resolveAngleSign(kind, screenDir, dominant);
+            const angleSign = resolveAngleSign(kind, line, screenDir, dominant);
             const angle = angleSign * Math.PI / 2;
             const allSlots = [];
 
@@ -483,7 +434,7 @@
                 }
             });
 
-            return { perm, layerSlots, rotAxis, degrees: angleSign * 90 };
+            return { perm };
         }
 
         function applyPermutation(perm) {
@@ -499,56 +450,6 @@
                     const sourceIdx = Number(source[1]);
                     cubeState[face][idx] = { ...snapshot[sourceFace][sourceIdx] };
                 }
-            });
-        }
-
-        function cellOffset(idx) {
-            const row = Math.floor(idx / 3);
-            const col = idx % 3;
-            return { x: (col - 1) * CELL_STEP, y: (row - 1) * CELL_STEP };
-        }
-
-        function createSliceClone(face, idx) {
-            const state = cubeState[face][idx];
-            const clone = document.createElement('div');
-            clone.className = `slice-sticker ${state.color}`;
-            if (state.cleared) {
-                clone.style.visibility = 'hidden';
-            }
-            clone.textContent = state.letter;
-            const offset = cellOffset(idx);
-            clone.style.transform = `${FACE_TRANSFORMS[face]} translate3d(${offset.x}px, ${offset.y}px, 0)`;
-            return clone;
-        }
-
-        function animateSlice(move) {
-            return new Promise(resolve => {
-                const cube = document.getElementById('cube');
-                const rotator = document.createElement('div');
-                rotator.className = 'slice-rotator';
-                const [ax, ay, az] = move.rotAxis;
-                const hiddenStickers = [];
-
-                move.layerSlots.forEach(slot => {
-                    const sticker = stickerMap[slot.face][slot.idx];
-                    sticker.classList.add('layer-hidden');
-                    hiddenStickers.push(sticker);
-                    rotator.appendChild(createSliceClone(slot.face, slot.idx));
-                });
-
-                cube.appendChild(rotator);
-                requestAnimationFrame(() => {
-                    rotator.style.transform = `rotate3d(${ax}, ${ay}, ${az}, ${move.degrees}deg)`;
-                });
-
-                const finish = () => {
-                    hiddenStickers.forEach(sticker => sticker.classList.remove('layer-hidden'));
-                    rotator.remove();
-                    resolve();
-                };
-
-                rotator.addEventListener('transitionend', finish, { once: true });
-                setTimeout(finish, SLICE_ANIM_MS + 80);
             });
         }
 
@@ -569,7 +470,7 @@
             });
         }
 
-        async function rotateLayer(kind, line, screenDir) {
+        function rotateLayer(kind, line, screenDir) {
             if (isLayerRotating) return;
             isLayerRotating = true;
             suppressClickAfterDrag = false;
@@ -577,7 +478,6 @@
 
             const dominantFace = getDominantFace();
             const move = computeLayerMove(kind, line, screenDir, dominantFace);
-            await animateSlice(move);
             applyPermutation(move.perm);
             renderCube();
             isLayerRotating = false;
