@@ -694,10 +694,75 @@
 
         let slicePreviewTimer = null;
 
+        function isStickerFacingCamera(sticker) {
+            const face = sticker.dataset.face;
+            const idx = Number(sticker.dataset.index);
+            const view = viewTransform(slotPos(face, idx), currentRotation.x, currentRotation.y);
+            return view.z > 0.05;
+        }
+
         function controlFaceBandStickers(face, kind, line) {
             return bandIndices(kind, line)
                 .map(idx => stickerMap[face][idx])
                 .filter(sticker => !sticker.classList.contains('cleared'));
+        }
+
+        function pickPreviewFace(kind, line) {
+            const band = pickSlice(kind, line);
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
+            let previewFace = band.face;
+            let bestScore = -1;
+
+            FACE_NAMES.forEach(face => {
+                const layer = bandLayerFromFace(face, kind, line);
+                if (layer.axisName !== band.axisName || layer.layerVal !== band.layerVal) {
+                    return;
+                }
+                const visibleIndices = bandIndices(kind, line).filter(idx => {
+                    const view = viewTransform(slotPos(face, idx), rxDeg, ryDeg);
+                    return view.z > 0.05;
+                });
+                if (visibleIndices.length === 0) {
+                    return;
+                }
+                const visibleCount = visibleIndices.length;
+                const avgZ = visibleIndices.reduce((sum, idx) => {
+                    return sum + viewTransform(slotPos(face, idx), rxDeg, ryDeg).z;
+                }, 0) / visibleCount;
+                const score = visibleCount * 100 + avgZ;
+                if (score > bestScore) {
+                    bestScore = score;
+                    previewFace = face;
+                }
+            });
+
+            return previewFace;
+        }
+
+        function visibleStickersInPhysicalSlice(axisName, layerVal) {
+            const slice = SLICE_OBJECTS[`${axisName}:${layerVal}`];
+            if (!slice) {
+                return [];
+            }
+            return slice.stickerKeys
+                .map(key => {
+                    const [face, idx] = key.split(':');
+                    return stickerMap[face][Number(idx)];
+                })
+                .filter(sticker => !sticker.classList.contains('cleared') && isStickerFacingCamera(sticker));
+        }
+
+        function visiblePreviewBandStickers(kind, line) {
+            const previewFace = pickPreviewFace(kind, line);
+            const bandStickers = controlFaceBandStickers(previewFace, kind, line)
+                .filter(isStickerFacingCamera);
+            if (bandStickers.length > 0) {
+                return bandStickers;
+            }
+
+            const band = pickSlice(kind, line);
+            return visibleStickersInPhysicalSlice(band.axisName, band.layerVal);
         }
 
         function sortBandStickersOnScreen(stickers, kind) {
@@ -715,12 +780,10 @@
             return withScreen.map(entry => entry.sticker);
         }
 
-        function pulseOrderForDirection(kind, screenDir) {
-            // Band is sorted screen-left→right (rows) or screen-bottom→top (cols).
-            if (kind === 'row') {
-                return screenDir === 'right' ? [0, 1, 2] : [2, 1, 0];
-            }
-            return screenDir === 'up' ? [0, 1, 2] : [2, 1, 0];
+        function buildPulseSequence(stickerCount, kind, screenDir) {
+            const indices = Array.from({ length: stickerCount }, (_, index) => index);
+            const forward = kind === 'row' ? screenDir === 'right' : screenDir === 'up';
+            return forward ? indices : indices.slice().reverse();
         }
 
         function clearSlicePreview() {
@@ -735,16 +798,20 @@
 
         function showSlicePreview(kind, line, screenDir) {
             clearSlicePreview();
-            const band = pickSlice(kind, line);
             const stickers = sortBandStickersOnScreen(
-                controlFaceBandStickers(band.face, kind, line),
+                visiblePreviewBandStickers(kind, line),
                 kind
             );
             if (stickers.length === 0) {
                 return;
             }
 
-            const order = pulseOrderForDirection(kind, screenDir);
+            const order = pulseOrderForDirection(kind, screenDir)
+                .filter(pos => pos < stickers.length);
+            if (order.length === 0) {
+                return;
+            }
+
             let phase = 0;
 
             const applyPhase = () => {
@@ -755,7 +822,7 @@
                 if (sticker) {
                     sticker.classList.add('slice-preview-active');
                 }
-                phase = (phase + 1) % 3;
+                phase = (phase + 1) % order.length;
             };
 
             applyPhase();
