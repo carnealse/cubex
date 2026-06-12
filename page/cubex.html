@@ -244,6 +244,16 @@
             }
         });
 
+        function getBoundaryEdges(face, row, col) {
+            const bounds = faceAdjacency[face];
+            const edges = [];
+            if (row === 0) edges.push(bounds.top);
+            if (row === 2) edges.push(bounds.bottom);
+            if (col === 0) edges.push(bounds.left);
+            if (col === 2) edges.push(bounds.right);
+            return edges;
+        }
+
         // 3D Adjacency Engine Validation
         function isAdjacent3D(lastSticker, nextSticker) {
             const f1 = lastSticker.dataset.face;
@@ -254,25 +264,12 @@
             const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
             const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
 
-            // Handle standard local face connectivity
             if (f1 === f2) {
                 return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
             }
 
-            // Check edge boundaries across 3D space
-            const bounds = faceAdjacency[f1];
-            let targetEdge = null;
-
-            if (r1 === 0) targetEdge = bounds.top;
-            if (r1 === 2) targetEdge = bounds.bottom;
-            if (c1 === 0) targetEdge = bounds.left;
-            if (c1 === 2) targetEdge = bounds.right;
-
-            if (targetEdge && targetEdge.face === f2) {
-                return targetEdge.indices.includes(idx2);
-            }
-
-            return false;
+            const edges = getBoundaryEdges(f1, r1, c1);
+            return edges.some(edge => edge.face === f2 && edge.indices.includes(idx2));
         }
 
         function handleStickerClick(e, sticker) {
