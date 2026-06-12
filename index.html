@@ -88,15 +88,15 @@
 
         .cube-stage {
             position: relative;
-            width: 420px;
-            height: 420px;
+            width: 460px;
+            height: 460px;
             margin-bottom: 100px;
         }
 
         .scene {
             position: absolute;
-            top: 105px;
-            left: 105px;
+            top: 125px;
+            left: 125px;
             width: 210px;
             height: 210px;
             perspective: 600px;
@@ -197,6 +197,35 @@
         .color-blue   { background-color: #0051ba; }
         .color-red    { background-color: #b71234; }
         .color-orange { background-color: #ff5800; }
+
+        .slice-rotator {
+            position: absolute;
+            inset: 0;
+            transform-style: preserve-3d;
+            transform-origin: center center;
+            pointer-events: none;
+            transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .slice-sticker {
+            position: absolute;
+            width: 62px;
+            height: 62px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #000000;
+            text-transform: uppercase;
+            transform-style: preserve-3d;
+            backface-visibility: hidden;
+        }
+
+        .sticker.layer-hidden {
+            visibility: hidden;
+        }
     </style>
 </head>
 <body>
@@ -236,9 +265,20 @@
         let suppressClickAfterDrag = false;
         let isLayerRotating = false;
         let currentRotation = { x: -25, y: 45 };
-        const STAGE_SIZE = 420;
-        const SCENE_OFFSET = 105;
-        const ARROW_INSET = 6;
+        const STAGE_SIZE = 460;
+        const SCENE_OFFSET = 125;
+        const ARROW_INSET = 4;
+        const CELL_STEP = 68;
+        const SLICE_ANIM_MS = 380;
+
+        const FACE_TRANSFORMS = {
+            front: 'rotateY(0deg) translateZ(105px)',
+            back: 'rotateY(180deg) translateZ(105px)',
+            right: 'rotateY(90deg) translateZ(105px)',
+            left: 'rotateY(-90deg) translateZ(105px)',
+            top: 'rotateX(90deg) translateZ(105px)',
+            bottom: 'rotateX(-90deg) translateZ(105px)'
+        };
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -281,119 +321,83 @@
             }
         };
 
-        // --- RUBIK LAYER ROTATION ENGINE ---
+        // --- RUBIK LAYER ROTATION ENGINE (3D slice physics) ---
         const FACE_NORMALS = {
             front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0],
             left: [-1, 0, 0], top: [0, -1, 0], bottom: [0, 1, 0]
         };
 
-        const FACE_RIGHT = {
-            front: [1, 0, 0], back: [-1, 0, 0], right: [0, 0, -1],
-            left: [0, 0, 1], top: [1, 0, 0], bottom: [1, 0, 0]
+        const FACE_BASIS = {
+            front:  { n: [0, 0, 1],  r: [1, 0, 0],  u: [0, 1, 0] },
+            back:   { n: [0, 0, -1], r: [-1, 0, 0], u: [0, 1, 0] },
+            right:  { n: [1, 0, 0],  r: [0, 0, -1], u: [0, 1, 0] },
+            left:   { n: [-1, 0, 0], r: [0, 0, 1],  u: [0, 1, 0] },
+            top:    { n: [0, -1, 0], r: [1, 0, 0],  u: [0, 0, -1] },
+            bottom: { n: [0, 1, 0],  r: [1, 0, 0],  u: [0, 0, 1] }
         };
 
-        const FACE_UP = {
-            front: [0, 1, 0], back: [0, 1, 0], right: [0, 1, 0],
-            left: [0, 1, 0], top: [0, 0, -1], bottom: [0, 0, 1]
-        };
-
-        const FACE_REMAP = {
-            front:  { front: 'front', right: 'right', back: 'back', left: 'left', top: 'top', bottom: 'bottom' },
-            right:  { front: 'right', right: 'back', back: 'left', left: 'front', top: 'top', bottom: 'bottom' },
-            back:   { front: 'back', right: 'left', back: 'front', left: 'right', top: 'top', bottom: 'bottom' },
-            left:   { front: 'left', right: 'front', back: 'right', left: 'back', top: 'top', bottom: 'bottom' },
-            top:    { front: 'top', right: 'right', back: 'bottom', left: 'left', top: 'back', bottom: 'front' },
-            bottom: { front: 'bottom', right: 'right', back: 'top', left: 'left', top: 'front', bottom: 'back' }
-        };
-
-        const INDEX_REMAP = {
-            front:  [0, 1, 2, 3, 4, 5, 6, 7, 8],
-            right:  [0, 1, 2, 3, 4, 5, 6, 7, 8],
-            back:   [0, 1, 2, 3, 4, 5, 6, 7, 8],
-            left:   [0, 1, 2, 3, 4, 5, 6, 7, 8],
-            top:    [6, 3, 0, 7, 4, 1, 8, 5, 2],
-            bottom: [2, 5, 8, 1, 4, 7, 0, 3, 6]
-        };
-
-        function rotateFaceCycles(face, clockwise) {
-            const corners = clockwise
-                ? [{ face, idx: 0 }, { face, idx: 2 }, { face, idx: 8 }, { face, idx: 6 }]
-                : [{ face, idx: 0 }, { face, idx: 6 }, { face, idx: 8 }, { face, idx: 2 }];
-            const edges = clockwise
-                ? [{ face, idx: 1 }, { face, idx: 5 }, { face, idx: 7 }, { face, idx: 3 }]
-                : [{ face, idx: 1 }, { face, idx: 3 }, { face, idx: 7 }, { face, idx: 5 }];
-            return [corners, edges];
+        function vecDot(a, b) {
+            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
         }
 
-        const FRONT_MOVES = {
-            row0right: [
-                [{ face: 'front', idx: 0 }, { face: 'front', idx: 1 }, { face: 'front', idx: 2 },
-                 { face: 'right', idx: 0 }, { face: 'right', idx: 1 }, { face: 'right', idx: 2 },
-                 { face: 'back', idx: 2 }, { face: 'back', idx: 1 }, { face: 'back', idx: 0 },
-                 { face: 'left', idx: 2 }, { face: 'left', idx: 1 }, { face: 'left', idx: 0 }],
-                ...rotateFaceCycles('top', false)
-            ],
-            row1right: [
-                [{ face: 'front', idx: 3 }, { face: 'front', idx: 4 }, { face: 'front', idx: 5 },
-                 { face: 'right', idx: 3 }, { face: 'right', idx: 4 }, { face: 'right', idx: 5 },
-                 { face: 'back', idx: 5 }, { face: 'back', idx: 4 }, { face: 'back', idx: 3 },
-                 { face: 'left', idx: 3 }, { face: 'left', idx: 4 }, { face: 'left', idx: 5 }]
-            ],
-            row2right: [
-                [{ face: 'front', idx: 6 }, { face: 'front', idx: 7 }, { face: 'front', idx: 8 },
-                 { face: 'right', idx: 6 }, { face: 'right', idx: 7 }, { face: 'right', idx: 8 },
-                 { face: 'back', idx: 8 }, { face: 'back', idx: 7 }, { face: 'back', idx: 6 },
-                 { face: 'left', idx: 6 }, { face: 'left', idx: 7 }, { face: 'left', idx: 8 }],
-                ...rotateFaceCycles('bottom', true)
-            ],
-            col0down: [
-                [{ face: 'front', idx: 0 }, { face: 'front', idx: 3 }, { face: 'front', idx: 6 },
-                 { face: 'bottom', idx: 0 }, { face: 'bottom', idx: 3 }, { face: 'bottom', idx: 6 },
-                 { face: 'back', idx: 8 }, { face: 'back', idx: 5 }, { face: 'back', idx: 2 },
-                 { face: 'top', idx: 0 }, { face: 'top', idx: 3 }, { face: 'top', idx: 6 }],
-                ...rotateFaceCycles('left', true)
-            ],
-            col1down: [
-                [{ face: 'front', idx: 1 }, { face: 'front', idx: 4 }, { face: 'front', idx: 7 },
-                 { face: 'bottom', idx: 1 }, { face: 'bottom', idx: 4 }, { face: 'bottom', idx: 7 },
-                 { face: 'back', idx: 7 }, { face: 'back', idx: 4 }, { face: 'back', idx: 1 },
-                 { face: 'top', idx: 1 }, { face: 'top', idx: 4 }, { face: 'top', idx: 7 }]
-            ],
-            col2down: [
-                [{ face: 'front', idx: 2 }, { face: 'front', idx: 5 }, { face: 'front', idx: 8 },
-                 { face: 'bottom', idx: 2 }, { face: 'bottom', idx: 5 }, { face: 'bottom', idx: 8 },
-                 { face: 'back', idx: 6 }, { face: 'back', idx: 3 }, { face: 'back', idx: 0 },
-                 { face: 'top', idx: 2 }, { face: 'top', idx: 5 }, { face: 'top', idx: 8 }],
-                ...rotateFaceCycles('right', true)
-            ]
-        };
-
-        FRONT_MOVES.row0left = FRONT_MOVES.row0right.map(cycle => [...cycle].reverse());
-        FRONT_MOVES.row1left = FRONT_MOVES.row1right.map(cycle => [...cycle].reverse());
-        FRONT_MOVES.row2left = FRONT_MOVES.row2right.map(cycle => [...cycle].reverse());
-        FRONT_MOVES.col0up = FRONT_MOVES.col0down.map(cycle => [...cycle].reverse());
-        FRONT_MOVES.col1up = FRONT_MOVES.col1down.map(cycle => [...cycle].reverse());
-        FRONT_MOVES.col2up = FRONT_MOVES.col2down.map(cycle => [...cycle].reverse());
-
-        function localToWorldSlot(localFace, localIdx, dominantFace) {
-            return {
-                face: FACE_REMAP[dominantFace][localFace],
-                idx: INDEX_REMAP[dominantFace][localIdx]
-            };
+        function vecAdd(a, b) {
+            return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
         }
 
-        function applyCycleToState(cycle, dominantFace) {
-            const worldSlots = cycle.map(pos => localToWorldSlot(pos.face, pos.idx, dominantFace));
-            const snapshot = worldSlots.map(pos => ({ ...cubeState[pos.face][pos.idx] }));
-            for (let i = 0; i < worldSlots.length; i++) {
-                const src = (i - 1 + worldSlots.length) % worldSlots.length;
-                const target = worldSlots[i];
-                cubeState[target.face][target.idx] = { ...snapshot[src] };
+        function vecScale(a, s) {
+            return [a[0] * s, a[1] * s, a[2] * s];
+        }
+
+        function vecSub(a, b) {
+            return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+        }
+
+        function slotKey(face, idx) {
+            return `${face}:${idx}`;
+        }
+
+        function slotPos(face, idx) {
+            const row = Math.floor(idx / 3);
+            const col = idx % 3;
+            const u = col - 1;
+            const v = 1 - row;
+            const basis = FACE_BASIS[face];
+            return vecAdd(vecScale(basis.n, 1.5), vecAdd(vecScale(basis.r, u), vecScale(basis.u, v)));
+        }
+
+        function rotateAroundAxis(vec, axis, angle) {
+            const [x, y, z] = vec;
+            const [ax, ay, az] = axis;
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            const oc = 1 - c;
+            return [
+                x * (c + oc * ax * ax) + y * (oc * ax * ay - s * az) + z * (oc * ax * az + s * ay),
+                x * (oc * ax * ay + s * az) + y * (c + oc * ay * ay) + z * (oc * ay * az - s * ax),
+                x * (oc * ax * az - s * ay) + y * (oc * ay * az + s * ax) + z * (c + oc * az * az)
+            ];
+        }
+
+        function findSlotAt(pos) {
+            let best = null;
+            let bestDist = Infinity;
+            for (const face of FACE_NAMES) {
+                const basis = FACE_BASIS[face];
+                const align = vecDot(pos, basis.n);
+                if (align > 0.5) {
+                    const rel = vecSub(pos, vecScale(basis.n, 1.5));
+                    const u = vecDot(rel, basis.r);
+                    const v = vecDot(rel, basis.u);
+                    const col = Math.max(0, Math.min(2, Math.round(u + 1)));
+                    const row = Math.max(0, Math.min(2, Math.round(1 - v)));
+                    const dist = Math.abs(u - (col - 1)) + Math.abs(v - (1 - row));
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = { face, idx: row * 3 + col };
+                    }
+                }
             }
-        }
-
-        function applyFrontMove(moveKey, dominantFace) {
-            FRONT_MOVES[moveKey].forEach(cycle => applyCycleToState(cycle, dominantFace));
+            return best;
         }
 
         function transformVector(vec, rxDeg, ryDeg) {
@@ -411,8 +415,18 @@
             return { x, y: y1, z };
         }
 
-        function dot3(a, b) {
-            return a.x * b.x + a.y * b.y + a.z * b.z;
+        function getScreenDirection3D(screenX, screenY) {
+            const rx = -currentRotation.x * Math.PI / 180;
+            const ry = -currentRotation.y * Math.PI / 180;
+            let x = screenX;
+            let y = screenY;
+            let z = 0;
+            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
+            z = y * Math.sin(rx) + z * Math.cos(rx);
+            y = y1;
+            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
+            z = -x * Math.sin(ry) + z * Math.cos(ry);
+            return [x1, y, z];
         }
 
         function getDominantFace() {
@@ -428,46 +442,114 @@
             return dominant;
         }
 
-        function getFaceBasisInView(face) {
-            return {
-                right: transformVector(FACE_RIGHT[face], currentRotation.x, currentRotation.y),
-                up: transformVector(FACE_UP[face], currentRotation.x, currentRotation.y)
-            };
+        function resolveAngleSign(kind, screenDir, dominant) {
+            const basis = FACE_BASIS[dominant];
+            const rotAxis = kind === 'col' ? basis.r : basis.u;
+            const moveDir = kind === 'col' ? basis.u : basis.r;
+            const rotated = rotateAroundAxis(moveDir, rotAxis, Math.PI / 2);
+            const screenVec = kind === 'col'
+                ? getScreenDirection3D(0, screenDir === 'up' ? -1 : 1)
+                : getScreenDirection3D(screenDir === 'right' ? 1 : -1, 0);
+            const positiveMatches = vecDot(rotated, screenVec) >= 0;
+            const wantPositive = screenDir === 'up' || screenDir === 'right';
+            return positiveMatches === wantPositive ? 1 : -1;
         }
 
-        function getScreenDirection3D(screenX, screenY) {
-            const rx = -currentRotation.x * Math.PI / 180;
-            const ry = -currentRotation.y * Math.PI / 180;
-            let x = screenX;
-            let y = screenY;
-            let z = 0;
-            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
-            const z1 = y * Math.sin(rx) + z * Math.cos(rx);
-            y = y1;
-            z = z1;
-            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-            const z2 = -x * Math.sin(ry) + z * Math.cos(ry);
-            return { x: x1, y, z: z2 };
+        function computeLayerMove(kind, line, screenDir, dominant) {
+            const basis = FACE_BASIS[dominant];
+            const rotAxis = kind === 'col' ? basis.r : basis.u;
+            const layerAxis = kind === 'col' ? basis.r : basis.u;
+            const layerVal = kind === 'col' ? line - 1 : 1 - line;
+            const angleSign = resolveAngleSign(kind, screenDir, dominant);
+            const angle = angleSign * Math.PI / 2;
+            const allSlots = [];
+
+            FACE_NAMES.forEach(face => {
+                for (let idx = 0; idx < 9; idx++) {
+                    allSlots.push({ face, idx, key: slotKey(face, idx), pos: slotPos(face, idx) });
+                }
+            });
+
+            const layerSlots = allSlots.filter(slot => Math.abs(vecDot(slot.pos, layerAxis) - layerVal) < 0.55);
+            const perm = {};
+            allSlots.forEach(slot => {
+                perm[slot.key] = slot.key;
+            });
+
+            layerSlots.forEach(slot => {
+                const target = findSlotAt(rotateAroundAxis(slot.pos, rotAxis, angle));
+                if (target) {
+                    perm[slotKey(target.face, target.idx)] = slot.key;
+                }
+            });
+
+            return { perm, layerSlots, rotAxis, degrees: angleSign * 90 };
         }
 
-        function resolveRowMove(line, screenDir) {
-            const dominant = getDominantFace();
-            const basis = getFaceBasisInView(dominant);
-            const screenVec = getScreenDirection3D(screenDir === 'left' ? -1 : 1, 0);
-            const faceRight = basis.right;
-            const aligned = dot3(faceRight, screenVec) >= 0;
-            const moveRight = screenDir === 'right' ? aligned : !aligned;
-            return `row${line}${moveRight ? 'right' : 'left'}`;
+        function applyPermutation(perm) {
+            const snapshot = {};
+            FACE_NAMES.forEach(face => {
+                snapshot[face] = cubeState[face].map(state => ({ ...state }));
+            });
+
+            FACE_NAMES.forEach(face => {
+                for (let idx = 0; idx < 9; idx++) {
+                    const source = perm[slotKey(face, idx)].split(':');
+                    const sourceFace = source[0];
+                    const sourceIdx = Number(source[1]);
+                    cubeState[face][idx] = { ...snapshot[sourceFace][sourceIdx] };
+                }
+            });
         }
 
-        function resolveColMove(line, screenDir) {
-            const dominant = getDominantFace();
-            const basis = getFaceBasisInView(dominant);
-            const screenVec = getScreenDirection3D(0, screenDir === 'up' ? -1 : 1);
-            const faceUp = basis.up;
-            const aligned = dot3(faceUp, screenVec) >= 0;
-            const moveDown = screenDir === 'down' ? aligned : !aligned;
-            return `col${line}${moveDown ? 'down' : 'up'}`;
+        function cellOffset(idx) {
+            const row = Math.floor(idx / 3);
+            const col = idx % 3;
+            return { x: (col - 1) * CELL_STEP, y: (row - 1) * CELL_STEP };
+        }
+
+        function createSliceClone(face, idx) {
+            const state = cubeState[face][idx];
+            const clone = document.createElement('div');
+            clone.className = `slice-sticker ${state.color}`;
+            if (state.cleared) {
+                clone.style.visibility = 'hidden';
+            }
+            clone.textContent = state.letter;
+            const offset = cellOffset(idx);
+            clone.style.transform = `${FACE_TRANSFORMS[face]} translate3d(${offset.x}px, ${offset.y}px, 0)`;
+            return clone;
+        }
+
+        function animateSlice(move) {
+            return new Promise(resolve => {
+                const cube = document.getElementById('cube');
+                const rotator = document.createElement('div');
+                rotator.className = 'slice-rotator';
+                const [ax, ay, az] = move.rotAxis;
+                const hiddenStickers = [];
+
+                move.layerSlots.forEach(slot => {
+                    const sticker = stickerMap[slot.face][slot.idx];
+                    sticker.classList.add('layer-hidden');
+                    hiddenStickers.push(sticker);
+                    rotator.appendChild(createSliceClone(slot.face, slot.idx));
+                });
+
+                cube.appendChild(rotator);
+                requestAnimationFrame(() => {
+                    rotator.style.transform = `rotate3d(${ax}, ${ay}, ${az}, ${move.degrees}deg)`;
+                });
+
+                const finish = () => {
+                    hiddenStickers.forEach(sticker => sticker.classList.remove('layer-hidden'));
+                    rotator.remove();
+                    resolve();
+                };
+
+                rotator.addEventListener('transitionend', finish, { once: true });
+                setTimeout(finish, SLICE_ANIM_MS + 80);
+            });
         }
 
         function renderCube() {
@@ -483,25 +565,20 @@
                 }
             });
             selectedStickers = selectedStickers.filter(sticker => {
-                if (!sticker.classList.contains('selected')) return false;
-                return !sticker.classList.contains('cleared');
+                return sticker.classList.contains('selected') && !sticker.classList.contains('cleared');
             });
         }
 
-        function rotateLayer(kind, line, screenDir) {
+        async function rotateLayer(kind, line, screenDir) {
             if (isLayerRotating) return;
             isLayerRotating = true;
             suppressClickAfterDrag = false;
             clearSelection();
+
             const dominantFace = getDominantFace();
-            const moveKey = kind === 'row'
-                ? resolveRowMove(line, screenDir)
-                : resolveColMove(line, screenDir);
-            if (!FRONT_MOVES[moveKey]) {
-                isLayerRotating = false;
-                return;
-            }
-            applyFrontMove(moveKey, dominantFace);
+            const move = computeLayerMove(kind, line, screenDir, dominantFace);
+            await animateSlice(move);
+            applyPermutation(move.perm);
             renderCube();
             isLayerRotating = false;
         }
@@ -718,7 +795,7 @@
         }
 
         window.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.rotate-btn')) return;
+            if (e.target.closest('.rotate-btn') || isLayerRotating) return;
             beginDrag(e.clientX, e.clientY);
         });
         window.addEventListener('mousemove', (e) => updateDrag(e.clientX, e.clientY));
