@@ -17,6 +17,8 @@
             align-items: center;
             justify-content: center;
             background: #111;
+            user-select: none;
+            touch-action: none;
         }
 
         .viewport {
@@ -27,6 +29,11 @@
             justify-content: center;
             perspective: 700px;
             perspective-origin: 50% 50%;
+            cursor: grab;
+        }
+
+        .viewport.is-dragging {
+            cursor: grabbing;
         }
 
         .cube {
@@ -34,7 +41,7 @@
             height: 210px;
             position: relative;
             transform-style: preserve-3d;
-            transform: rotateX(-22deg) rotateY(-28deg);
+            transform: rotateX(0deg) rotateY(0deg);
         }
 
         .face {
@@ -65,7 +72,7 @@
     </style>
 </head>
 <body>
-    <div class="viewport">
+    <div class="viewport" id="viewport">
         <div class="cube" id="cube"></div>
     </div>
 
@@ -131,11 +138,74 @@
 
         buildCube();
 
+        const viewport = document.getElementById('viewport');
+        const DEFAULT_ROTATION = { x: 0, y: 0 };
+        let rotation = { ...DEFAULT_ROTATION };
+        let isDragging = false;
+        let activePointerId = null;
+        let lastPointer = { x: 0, y: 0 };
+
+        function applyRotation() {
+            cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
+        }
+
+        function resetRotation() {
+            rotation = { ...DEFAULT_ROTATION };
+            applyRotation();
+        }
+
+        viewport.addEventListener('pointerdown', (event) => {
+            isDragging = true;
+            activePointerId = event.pointerId;
+            lastPointer = { x: event.clientX, y: event.clientY };
+            viewport.classList.add('is-dragging');
+            viewport.setPointerCapture(event.pointerId);
+        });
+
+        viewport.addEventListener('pointermove', (event) => {
+            if (!isDragging || event.pointerId !== activePointerId) {
+                return;
+            }
+
+            const dx = event.clientX - lastPointer.x;
+            const dy = event.clientY - lastPointer.y;
+            lastPointer = { x: event.clientX, y: event.clientY };
+
+            rotation.y += dx * 0.5;
+            rotation.x -= dy * 0.5;
+            applyRotation();
+        });
+
+        function endDrag(event) {
+            if (!isDragging || (event.pointerId !== activePointerId && event.type !== 'pointercancel')) {
+                return;
+            }
+
+            isDragging = false;
+            activePointerId = null;
+            viewport.classList.remove('is-dragging');
+
+            if (viewport.hasPointerCapture(event.pointerId)) {
+                viewport.releasePointerCapture(event.pointerId);
+            }
+        }
+
+        viewport.addEventListener('pointerup', endDrag);
+        viewport.addEventListener('pointercancel', endDrag);
+
+        applyRotation();
+
         window.cubeApi = {
             faces: FACE_NAMES,
             colors: COLORS,
             sticker,
-            bandStickers
+            bandStickers,
+            getRotation: () => ({ ...rotation }),
+            setRotation: (x, y) => {
+                rotation = { x, y };
+                applyRotation();
+            },
+            resetRotation
         };
     </script>
 </body>
