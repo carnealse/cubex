@@ -194,6 +194,7 @@
 
         .sticker.slice-preview-active::before {
             opacity: 1;
+            transition: none;
         }
 
         .sticker.selected {
@@ -693,42 +694,33 @@
 
         let slicePreviewTimer = null;
 
-        function stickerGroupsInSlice(axisName, layerVal) {
-            const axis = CUBE_AXES[axisName];
-            const groups = [];
-            FACE_NAMES.forEach(face => {
-                const inSlice = [];
-                for (let idx = 0; idx < 9; idx++) {
-                    if (Math.abs(vecDot(slotPos(face, idx), axis) - layerVal) > 0.55) {
-                        continue;
-                    }
-                    inSlice.push({
-                        row: Math.floor(idx / 3),
-                        col: idx % 3,
-                        sticker: stickerMap[face][idx]
-                    });
-                }
-                if (inSlice.length !== 3) {
-                    return;
-                }
-                const sameRow = inSlice.every(s => s.row === inSlice[0].row);
-                const sameCol = inSlice.every(s => s.col === inSlice[0].col);
-                if (!sameRow && !sameCol) {
-                    return;
-                }
-                const sorted = inSlice.slice().sort((a, b) => (
-                    sameRow ? a.col - b.col : a.row - b.row
-                ));
-                groups.push(sorted.map(entry => entry.sticker));
+        function controlFaceBandStickers(face, kind, line) {
+            return bandIndices(kind, line)
+                .map(idx => stickerMap[face][idx])
+                .filter(sticker => !sticker.classList.contains('cleared'));
+        }
+
+        function sortBandStickersOnScreen(stickers, kind) {
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
+            const withScreen = stickers.map(sticker => {
+                const face = sticker.dataset.face;
+                const idx = Number(sticker.dataset.index);
+                const view = viewTransform(slotPos(face, idx), rxDeg, ryDeg);
+                return { sticker, view };
             });
-            return groups;
+            withScreen.sort((a, b) => (
+                kind === 'row' ? a.view.x - b.view.x : b.view.y - a.view.y
+            ));
+            return withScreen.map(entry => entry.sticker);
         }
 
         function pulseOrderForDirection(kind, screenDir) {
+            // Band is sorted screen-left→right (rows) or screen-bottom→top (cols).
             if (kind === 'row') {
                 return screenDir === 'right' ? [0, 1, 2] : [2, 1, 0];
             }
-            return screenDir === 'up' ? [2, 1, 0] : [0, 1, 2];
+            return screenDir === 'up' ? [0, 1, 2] : [2, 1, 0];
         }
 
         function clearSlicePreview() {
@@ -744,8 +736,11 @@
         function showSlicePreview(kind, line, screenDir) {
             clearSlicePreview();
             const band = pickSlice(kind, line);
-            const groups = stickerGroupsInSlice(band.axisName, band.layerVal);
-            if (groups.length === 0) {
+            const stickers = sortBandStickersOnScreen(
+                controlFaceBandStickers(band.face, kind, line),
+                kind
+            );
+            if (stickers.length === 0) {
                 return;
             }
 
@@ -756,13 +751,10 @@
                 document.querySelectorAll('.sticker.slice-preview-active').forEach(sticker => {
                     sticker.classList.remove('slice-preview-active');
                 });
-                const bandPos = order[phase];
-                groups.forEach(stickers => {
-                    const sticker = stickers[bandPos];
-                    if (sticker && !sticker.classList.contains('cleared')) {
-                        sticker.classList.add('slice-preview-active');
-                    }
-                });
+                const sticker = stickers[order[phase]];
+                if (sticker) {
+                    sticker.classList.add('slice-preview-active');
+                }
                 phase = (phase + 1) % 3;
             };
 
