@@ -88,15 +88,15 @@
 
         .cube-stage {
             position: relative;
-            width: 280px;
-            height: 280px;
+            width: 360px;
+            height: 360px;
             margin-bottom: 100px;
         }
 
         .scene {
             position: absolute;
-            top: 35px;
-            left: 35px;
+            top: 75px;
+            left: 75px;
             width: 210px;
             height: 210px;
             perspective: 600px;
@@ -111,20 +111,20 @@
 
         .rotate-btn {
             position: absolute;
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             padding: 0;
             border: none;
             border-radius: 4px;
-            background: transparent;
+            background: rgba(18, 18, 18, 0.75);
             color: #ff4757;
-            font-size: 1.15rem;
+            font-size: 1.25rem;
             font-weight: bold;
             line-height: 1;
             cursor: pointer;
             pointer-events: auto;
             transform: translate(-50%, -50%);
-            transition: transform 0.15s, color 0.15s;
+            transition: transform 0.15s, color 0.15s, background 0.15s;
         }
 
         .rotate-btn:hover {
@@ -226,11 +226,16 @@
     <script>
         const letters = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSSSTTTTTTUUUUVVWWXYYZ";
         const FACE_NAMES = ['front', 'back', 'right', 'left', 'top', 'bottom'];
+        const COLOR_CLASSES = ['color-white', 'color-yellow', 'color-red', 'color-orange', 'color-blue', 'color-green'];
         const stickerMap = {};
+        const cubeState = {};
         let selectedStickers = [];
         let suppressClickAfterDrag = false;
         let isLayerRotating = false;
         let currentRotation = { x: -25, y: 45 };
+        const STAGE_SIZE = 360;
+        const SCENE_OFFSET = 75;
+        const ARROW_INSET = 18;
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -274,6 +279,21 @@
         };
 
         // --- RUBIK LAYER ROTATION ENGINE ---
+        const FACE_NORMALS = {
+            front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0],
+            left: [-1, 0, 0], top: [0, -1, 0], bottom: [0, 1, 0]
+        };
+
+        const FACE_RIGHT = {
+            front: [1, 0, 0], back: [-1, 0, 0], right: [0, 0, -1],
+            left: [0, 0, 1], top: [1, 0, 0], bottom: [1, 0, 0]
+        };
+
+        const FACE_UP = {
+            front: [0, 1, 0], back: [0, 1, 0], right: [0, 1, 0],
+            left: [0, 1, 0], top: [0, 0, -1], bottom: [0, 0, 1]
+        };
+
         const FACE_REMAP = {
             front:  { front: 'front', right: 'right', back: 'back', left: 'left', top: 'top', bottom: 'bottom' },
             right:  { front: 'right', right: 'back', back: 'left', left: 'front', top: 'top', bottom: 'bottom' },
@@ -292,41 +312,23 @@
             bottom: [2, 5, 8, 1, 4, 7, 0, 3, 6]
         };
 
-        const FACE_NORMALS = {
-            front: [0, 0, 1],
-            back: [0, 0, -1],
-            right: [1, 0, 0],
-            left: [-1, 0, 0],
-            top: [0, -1, 0],
-            bottom: [0, 1, 0]
-        };
-
-        function localToWorld(face, idx, dominantFace) {
-            const worldFace = FACE_REMAP[dominantFace][face];
-            const worldIdx = INDEX_REMAP[dominantFace][idx];
-            return { face: worldFace, idx: worldIdx };
-        }
-
-        function faceCornerCycle(face, clockwise) {
-            return clockwise
+        function rotateFaceCycles(face, clockwise) {
+            const corners = clockwise
                 ? [{ face, idx: 0 }, { face, idx: 2 }, { face, idx: 8 }, { face, idx: 6 }]
                 : [{ face, idx: 0 }, { face, idx: 6 }, { face, idx: 8 }, { face, idx: 2 }];
-        }
-
-        function faceEdgeCycle(face, clockwise) {
-            return clockwise
+            const edges = clockwise
                 ? [{ face, idx: 1 }, { face, idx: 5 }, { face, idx: 7 }, { face, idx: 3 }]
                 : [{ face, idx: 1 }, { face, idx: 3 }, { face, idx: 7 }, { face, idx: 5 }];
+            return [corners, edges];
         }
 
-        const LOCAL_LAYER_MOVES = {
+        const FRONT_MOVES = {
             row0right: [
                 [{ face: 'front', idx: 0 }, { face: 'front', idx: 1 }, { face: 'front', idx: 2 },
                  { face: 'right', idx: 0 }, { face: 'right', idx: 1 }, { face: 'right', idx: 2 },
                  { face: 'back', idx: 2 }, { face: 'back', idx: 1 }, { face: 'back', idx: 0 },
                  { face: 'left', idx: 2 }, { face: 'left', idx: 1 }, { face: 'left', idx: 0 }],
-                faceCornerCycle('top', false),
-                faceEdgeCycle('top', false)
+                ...rotateFaceCycles('top', false)
             ],
             row1right: [
                 [{ face: 'front', idx: 3 }, { face: 'front', idx: 4 }, { face: 'front', idx: 5 },
@@ -339,16 +341,14 @@
                  { face: 'right', idx: 6 }, { face: 'right', idx: 7 }, { face: 'right', idx: 8 },
                  { face: 'back', idx: 8 }, { face: 'back', idx: 7 }, { face: 'back', idx: 6 },
                  { face: 'left', idx: 6 }, { face: 'left', idx: 7 }, { face: 'left', idx: 8 }],
-                faceCornerCycle('bottom', true),
-                faceEdgeCycle('bottom', true)
+                ...rotateFaceCycles('bottom', true)
             ],
             col0down: [
                 [{ face: 'front', idx: 0 }, { face: 'front', idx: 3 }, { face: 'front', idx: 6 },
                  { face: 'bottom', idx: 0 }, { face: 'bottom', idx: 3 }, { face: 'bottom', idx: 6 },
                  { face: 'back', idx: 8 }, { face: 'back', idx: 5 }, { face: 'back', idx: 2 },
                  { face: 'top', idx: 0 }, { face: 'top', idx: 3 }, { face: 'top', idx: 6 }],
-                faceCornerCycle('left', true),
-                faceEdgeCycle('left', true)
+                ...rotateFaceCycles('left', true)
             ],
             col1down: [
                 [{ face: 'front', idx: 1 }, { face: 'front', idx: 4 }, { face: 'front', idx: 7 },
@@ -361,46 +361,42 @@
                  { face: 'bottom', idx: 2 }, { face: 'bottom', idx: 5 }, { face: 'bottom', idx: 8 },
                  { face: 'back', idx: 6 }, { face: 'back', idx: 3 }, { face: 'back', idx: 0 },
                  { face: 'top', idx: 2 }, { face: 'top', idx: 5 }, { face: 'top', idx: 8 }],
-                faceCornerCycle('right', true),
-                faceEdgeCycle('right', true)
+                ...rotateFaceCycles('right', true)
             ]
         };
 
-        LOCAL_LAYER_MOVES.row0left = LOCAL_LAYER_MOVES.row0right.map(cycle => [...cycle].reverse());
-        LOCAL_LAYER_MOVES.row1left = LOCAL_LAYER_MOVES.row1right.map(cycle => [...cycle].reverse());
-        LOCAL_LAYER_MOVES.row2left = LOCAL_LAYER_MOVES.row2right.map(cycle => [...cycle].reverse());
-        LOCAL_LAYER_MOVES.col0up = LOCAL_LAYER_MOVES.col0down.map(cycle => [...cycle].reverse());
-        LOCAL_LAYER_MOVES.col1up = LOCAL_LAYER_MOVES.col1down.map(cycle => [...cycle].reverse());
-        LOCAL_LAYER_MOVES.col2up = LOCAL_LAYER_MOVES.col2down.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.row0left = FRONT_MOVES.row0right.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.row1left = FRONT_MOVES.row1right.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.row2left = FRONT_MOVES.row2right.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.col0up = FRONT_MOVES.col0down.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.col1up = FRONT_MOVES.col1down.map(cycle => [...cycle].reverse());
+        FRONT_MOVES.col2up = FRONT_MOVES.col2down.map(cycle => [...cycle].reverse());
 
-        function readStickerState(sticker) {
+        function localToWorldSlot(localFace, localIdx, dominantFace) {
             return {
-                letter: sticker.textContent,
-                cleared: sticker.classList.contains('cleared'),
-                selected: sticker.classList.contains('selected')
+                face: FACE_REMAP[dominantFace][localFace],
+                idx: INDEX_REMAP[dominantFace][localIdx]
             };
         }
 
-        function writeStickerState(sticker, state) {
-            sticker.textContent = state.letter;
-            sticker.classList.toggle('cleared', state.cleared);
-            sticker.classList.toggle('selected', state.selected);
-        }
-
-        function applyLocalCycle(localCycle, dominantFace, reverse) {
-            const worldCycle = localCycle.map(pos => localToWorld(pos.face, pos.idx, dominantFace));
-            const ordered = reverse ? [...worldCycle].reverse() : worldCycle;
-            const states = ordered.map(pos => readStickerState(stickerMap[pos.face][pos.idx]));
-            for (let i = 0; i < ordered.length; i++) {
-                const src = (i - 1 + ordered.length) % ordered.length;
-                writeStickerState(stickerMap[ordered[i].face][ordered[i].idx], states[src]);
+        function applyCycleToState(cycle, dominantFace) {
+            const worldSlots = cycle.map(pos => localToWorldSlot(pos.face, pos.idx, dominantFace));
+            const snapshot = worldSlots.map(pos => ({ ...cubeState[pos.face][pos.idx] }));
+            for (let i = 0; i < worldSlots.length; i++) {
+                const src = (i - 1 + worldSlots.length) % worldSlots.length;
+                const target = worldSlots[i];
+                cubeState[target.face][target.idx] = { ...snapshot[src] };
             }
         }
 
-        function transformNormal(normal, rxDeg, ryDeg) {
+        function applyFrontMove(moveKey, dominantFace) {
+            FRONT_MOVES[moveKey].forEach(cycle => applyCycleToState(cycle, dominantFace));
+        }
+
+        function transformVector(vec, rxDeg, ryDeg) {
             const rx = rxDeg * Math.PI / 180;
             const ry = ryDeg * Math.PI / 180;
-            let [x, y, z] = normal;
+            let [x, y, z] = vec;
             const x1 = x * Math.cos(ry) + z * Math.sin(ry);
             const z1 = -x * Math.sin(ry) + z * Math.cos(ry);
             x = x1;
@@ -410,11 +406,19 @@
             return { x, y: y1, z };
         }
 
+        function dot3(a, b) {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+        }
+
         function getDominantFace() {
             let dominant = 'front';
             let bestZ = -Infinity;
             for (const face of FACE_NAMES) {
-                const rotated = transformNormal(FACE_NORMALS[face], currentRotation.x, currentRotation.y);
+                const rotated = transformVector(
+                    { x: FACE_NORMALS[face][0], y: FACE_NORMALS[face][1], z: FACE_NORMALS[face][2] },
+                    currentRotation.x,
+                    currentRotation.y
+                );
                 if (rotated.z > bestZ) {
                     bestZ = rotated.z;
                     dominant = face;
@@ -423,20 +427,82 @@
             return dominant;
         }
 
-        function rotateLayer(moveKey) {
+        function getFaceBasisInView(face) {
+            const toVec = (v) => transformVector({ x: v[0], y: v[1], z: v[2] }, currentRotation.x, currentRotation.y);
+            return {
+                right: toVec(FACE_RIGHT[face]),
+                up: toVec(FACE_UP[face])
+            };
+        }
+
+        function getScreenDirection3D(screenX, screenY) {
+            const rx = -currentRotation.x * Math.PI / 180;
+            const ry = -currentRotation.y * Math.PI / 180;
+            let x = screenX;
+            let y = screenY;
+            let z = 0;
+            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
+            const z1 = y * Math.sin(rx) + z * Math.cos(rx);
+            y = y1;
+            z = z1;
+            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
+            const z2 = -x * Math.sin(ry) + z * Math.cos(ry);
+            return { x: x1, y, z: z2 };
+        }
+
+        function resolveRowMove(line, screenDir) {
+            const dominant = getDominantFace();
+            const basis = getFaceBasisInView(dominant);
+            const screenVec = getScreenDirection3D(screenDir === 'left' ? -1 : 1, 0);
+            const faceRight = basis.right;
+            const aligned = dot3(faceRight, screenVec) >= 0;
+            const moveRight = screenDir === 'right' ? aligned : !aligned;
+            return `row${line}${moveRight ? 'right' : 'left'}`;
+        }
+
+        function resolveColMove(line, screenDir) {
+            const dominant = getDominantFace();
+            const basis = getFaceBasisInView(dominant);
+            const screenVec = getScreenDirection3D(0, screenDir === 'up' ? -1 : 1);
+            const faceUp = basis.up;
+            const aligned = dot3(faceUp, screenVec) >= 0;
+            const moveDown = screenDir === 'down' ? aligned : !aligned;
+            return `col${line}${moveDown ? 'down' : 'up'}`;
+        }
+
+        function renderCube() {
+            FACE_NAMES.forEach(face => {
+                for (let i = 0; i < 9; i++) {
+                    const sticker = stickerMap[face][i];
+                    const state = cubeState[face][i];
+                    sticker.textContent = state.letter;
+                    sticker.classList.toggle('cleared', state.cleared);
+                    sticker.classList.toggle('selected', state.selected);
+                    COLOR_CLASSES.forEach(colorClass => sticker.classList.remove(colorClass));
+                    sticker.classList.add(state.color);
+                }
+            });
+            selectedStickers = selectedStickers.filter(sticker => {
+                if (!sticker.classList.contains('selected')) return false;
+                return !sticker.classList.contains('cleared');
+            });
+        }
+
+        function rotateLayer(kind, line, screenDir) {
             if (isLayerRotating) return;
             isLayerRotating = true;
             clearSelection();
             const dominantFace = getDominantFace();
-            const cycles = LOCAL_LAYER_MOVES[moveKey];
-            cycles.forEach(cycle => applyLocalCycle(cycle, dominantFace, false));
+            const moveKey = kind === 'row'
+                ? resolveRowMove(line, screenDir)
+                : resolveColMove(line, screenDir);
+            applyFrontMove(moveKey, dominantFace);
+            renderCube();
             isLayerRotating = false;
         }
 
         function buildRotationControls() {
             const container = document.getElementById('rotate-controls');
-            const stageSize = 280;
-            const sceneOffset = 35;
             const cell = 210 / 3;
 
             const addButton = (kind, line, direction, symbol, x, y) => {
@@ -444,7 +510,7 @@
                 button.type = 'button';
                 button.className = 'rotate-btn';
                 button.textContent = symbol;
-                button.title = `Rotate ${kind} ${line + 1} ${direction}`;
+                button.title = `Rotate ${kind} ${line + 1} toward screen ${direction}`;
                 button.style.left = `${x}px`;
                 button.style.top = `${y}px`;
                 button.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -452,21 +518,21 @@
                 button.addEventListener('click', (e) => {
                     e.stopPropagation();
                     suppressClickAfterDrag = false;
-                    rotateLayer(`${kind}${line}${direction}`);
+                    rotateLayer(kind, line, direction);
                 });
                 container.appendChild(button);
             };
 
             for (let row = 0; row < 3; row++) {
-                const y = sceneOffset + row * cell + cell / 2;
-                addButton('row', row, 'left', '◀', 14, y);
-                addButton('row', row, 'right', '▶', stageSize - 14, y);
+                const y = SCENE_OFFSET + row * cell + cell / 2;
+                addButton('row', row, 'left', '◀', ARROW_INSET, y);
+                addButton('row', row, 'right', '▶', STAGE_SIZE - ARROW_INSET, y);
             }
 
             for (let col = 0; col < 3; col++) {
-                const x = sceneOffset + col * cell + cell / 2;
-                addButton('col', col, 'up', '▲', x, 14);
-                addButton('col', col, 'down', '▼', x, stageSize - 14);
+                const x = SCENE_OFFSET + col * cell + cell / 2;
+                addButton('col', col, 'up', '▲', x, ARROW_INSET);
+                addButton('col', col, 'down', '▼', x, STAGE_SIZE - ARROW_INSET);
             }
         }
 
@@ -475,14 +541,23 @@
             const baseColor = face.getAttribute('data-color');
             const faceName = face.getAttribute('data-face');
             stickerMap[faceName] = [];
+            cubeState[faceName] = [];
 
             for (let i = 0; i < 9; i++) {
                 const sticker = document.createElement('div');
                 sticker.classList.add('sticker', baseColor);
-                sticker.textContent = letters[Math.floor(Math.random() * letters.length)];
+                const letter = letters[Math.floor(Math.random() * letters.length)];
+                sticker.textContent = letter;
 
                 sticker.dataset.face = faceName;
                 sticker.dataset.index = i;
+
+                cubeState[faceName][i] = {
+                    letter,
+                    color: baseColor,
+                    cleared: false,
+                    selected: false
+                };
 
                 sticker.addEventListener('click', (e) => handleStickerClick(e, sticker));
                 face.appendChild(sticker);
@@ -530,7 +605,10 @@
 
             const selectedIndex = selectedStickers.indexOf(sticker);
             if (selectedIndex !== -1) {
-                selectedStickers.splice(selectedIndex).forEach(s => s.classList.remove('selected'));
+                selectedStickers.splice(selectedIndex).forEach(s => {
+                    s.classList.remove('selected');
+                    cubeState[s.dataset.face][Number(s.dataset.index)].selected = false;
+                });
                 updateWordDisplay();
                 return;
             }
@@ -544,6 +622,7 @@
             }
 
             sticker.classList.add('selected');
+            cubeState[sticker.dataset.face][Number(sticker.dataset.index)].selected = true;
             selectedStickers.push(sticker);
             updateWordDisplay();
         }
@@ -554,7 +633,10 @@
         }
 
         function clearSelection() {
-            selectedStickers.forEach(s => s.classList.remove('selected'));
+            selectedStickers.forEach(s => {
+                s.classList.remove('selected');
+                cubeState[s.dataset.face][Number(s.dataset.index)].selected = false;
+            });
             selectedStickers = [];
             updateWordDisplay();
         }
@@ -570,8 +652,12 @@
             if (wordSet.has(currentWord.toUpperCase())) {
                 showMessage(`Valid 3D Word: ${currentWord}!`, "#2ed573");
                 selectedStickers.forEach(s => {
+                    const face = s.dataset.face;
+                    const idx = Number(s.dataset.index);
                     s.classList.remove('selected');
                     s.classList.add('cleared');
+                    cubeState[face][idx].selected = false;
+                    cubeState[face][idx].cleared = true;
                 });
                 selectedStickers = [];
                 updateWordDisplay();
