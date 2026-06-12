@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Word Cube - Wordle Style</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #121212;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            font-family: system-ui, -apple-system, sans-serif;
+            color: white;
+        }
+
+        .ui-container {
+            position: absolute;
+            bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+            width: 100%;
+            max-width: 400px;
+            padding: 0 20px;
+        }
+
+        .current-word {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            min-height: 48px;
+            text-transform: uppercase;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: background 0.2s;
+        }
+
+        .btn-submit { background-color: #2ed573; color: black; }
+        .btn-submit:hover { background-color: #26af5f; }
+        .btn-clear { background-color: #ff4757; color: white; }
+        .btn-clear:hover { background-color: #d63c4a; }
+
+        .message {
+            position: absolute;
+            top: 40px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            min-height: 30px;
+            color: #ffd43b;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .scene {
+            width: 210px;
+            height: 210px;
+            perspective: 600px;
+            margin-bottom: 100px;
+        }
+
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-25deg) rotateY(45deg);
+            transition: transform 0.05s ease-out;
+        }
+
+        .face {
+            position: absolute;
+            width: 210px;
+            height: 210px;
+            background: #000000;
+            padding: 6px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 6px;
+            backface-visibility: hidden;
+        }
+
+        .sticker {
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #000000;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.3s;
+        }
+
+        .sticker.selected {
+            transform: scale(0.9);
+            border: 3px solid #ffffff;
+            color: #ffffff !important;
+            background-color: #333333 !important;
+        }
+
+        .sticker.cleared {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* 3D Transform Space positions matching standard fold coordinates */
+        .front  { transform: rotateY(  0deg) translateZ(105px); }
+        .back   { transform: rotateY(180deg) translateZ(105px); }
+        .right  { transform: rotateY( 90deg) translateZ(105px); }
+        .left   { transform: rotateY(-90deg) translateZ(105px); }
+        .top    { transform: rotateX( 90deg) translateZ(105px); }
+        .bottom { transform: rotateX(-90deg) translateZ(105px); }
+
+        .color-white  { background-color: #ffffff; }
+        .color-yellow { background-color: #ffd43b; }
+        .color-green  { background-color: #009e60; }
+        .color-blue   { background-color: #0051ba; }
+        .color-red    { background-color: #b71234; }
+        .color-orange { background-color: #ff5800; }
+    </style>
+</head>
+<body>
+
+    <div class="message" id="message">3D Wrap Word Cube Active. Chain letters over any edge!</div>
+
+    <div class="scene">
+        <div class="cube" id="cube">
+            <div class="face front" data-face="front" data-color="color-white"></div>
+            <div class="face back" data-face="back" data-color="color-yellow"></div>
+            <div class="face right" data-face="right" data-color="color-red"></div>
+            <div class="face left" data-face="left" data-color="color-orange"></div>
+            <div class="face top" data-face="top" data-color="color-blue"></div>
+            <div class="face bottom" data-face="bottom" data-color="color-green"></div>
+        </div>
+    </div>
+
+    <div class="ui-container">
+        <div class="current-word" id="current-word"></div>
+        <div class="btn-group">
+            <button class="btn-clear" onclick="clearSelection()">Clear</button>
+            <button class="btn-submit" onclick="submitWord()">Submit</button>
+        </div>
+    </div>
+
+    <script>
+        const letters = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSSSTTTTTTUUUUVVWWXYYZ";
+        let selectedStickers = [];
+
+        // --- WORDLE-STYLE CLIENT EMBEDDED DICTIONARY ---
+        // Expand this comma-separated string directly to include up to 150,000 words.
+        const rawDictionary = "PIT,CUBE,WORD,PLAY,GAME,RUBIK,WEB,STACK,AMPLITUDE,ALGORITHM,BACKEND,DEVELOPER,ELASTIC,FRAMEWORK,FUNCTION,GRID,INDEX,JAVASCRIPT,KIBANA,LOGSTASH,MATRIX,NODE,OBJECT,PIPELINE,QUERY,REACT,TRANSFORM,VARIABLE,DICTIONARY,ARCHITECTURE,CONNECTIVITY";
+        const wordSet = new Set(rawDictionary.split(','));
+
+        // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
+        // Maps the boundary rows/columns of each face to their neighbor coordinates
+        const faceAdjacency = {
+            front: {
+                top:    { face: 'top',    indices: [6, 7, 8] }, // Bottom row of top
+                bottom: { face: 'bottom', indices: [0, 1, 2] }, // Top row of bottom
+                left:   { face: 'left',   indices: [2, 5, 8] }, // Right col of left
+                right:  { face: 'right',  indices: [0, 3, 6] }  // Left col of right
+            },
+            back: {
+                top:    { face: 'top',    indices: [2, 1, 0] },
+                bottom: { face: 'bottom', indices: [8, 7, 6] },
+                left:   { face: 'right',  indices: [2, 5, 8] },
+                right:  { face: 'left',   indices: [0, 3, 6] }
+            },
+            right: {
+                top:    { face: 'top',    indices: [8, 5, 2] },
+                bottom: { face: 'bottom', indices: [2, 5, 8] },
+                left:   { face: 'front',  indices: [2, 5, 8] },
+                right:  { face: 'back',   indices: [0, 3, 6] }
+            },
+            left: {
+                top:    { face: 'top',    indices: [0, 3, 6] },
+                bottom: { face: 'bottom', indices: [6, 3, 0] },
+                left:   { face: 'back',   indices: [2, 5, 8] },
+                right:  { face: 'front',  indices: [0, 3, 6] }
+            },
+            top: {
+                top:    { face: 'back',   indices: [2, 1, 0] },
+                bottom: { face: 'front',  indices: [0, 1, 2] },
+                left:   { face: 'left',   indices: [0, 1, 2] },
+                right:  { face: 'right',  indices: [2, 1, 0] }
+            },
+            bottom: {
+                top:    { face: 'front',  indices: [6, 7, 8] },
+                bottom: { face: 'back',   indices: [6, 7, 8] },
+                left:   { face: 'left',   indices: [6, 7, 8] },
+                right:  { face: 'right',  indices: [6, 7, 8] }
+            }
+        };
+
+        // Initialize Cube
+        document.querySelectorAll('.face').forEach(face => {
+            const baseColor = face.getAttribute('data-color');
+            const faceName = face.getAttribute('data-face');
+            
+            for (let i = 0; i < 9; i++) {
+                const sticker = document.createElement('div');
+                sticker.classList.add('sticker', baseColor);
+                sticker.textContent = letters[Math.floor(Math.random() * letters.length)];
+                
+                sticker.dataset.face = faceName;
+                sticker.dataset.index = i;
+                
+                sticker.addEventListener('click', (e) => handleStickerClick(e, sticker));
+                face.appendChild(sticker);
+            }
+        });
+
+        // 3D Adjacency Engine Validation
+        function isAdjacent3D(lastSticker, nextSticker) {
+            const f1 = lastSticker.dataset.face;
+            const idx1 = parseInt(lastSticker.dataset.index);
+            const f2 = nextSticker.dataset.face;
+            const idx2 = parseInt(nextSticker.dataset.index);
+
+            const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
+            const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
+
+            // Handle standard local face connectivity
+            if (f1 === f2) {
+                return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
+            }
+
+            // Check edge boundaries across 3D space
+            const bounds = faceAdjacency[f1];
+            let targetEdge = null;
+
+            if (r1 === 0) targetEdge = bounds.top;
+            if (r1 === 2) targetEdge = bounds.bottom;
+            if (c1 === 0) targetEdge = bounds.left;
+            if (c1 === 2) targetEdge = bounds.right;
+
+            if (targetEdge && targetEdge.face === f2) {
+                return targetEdge.indices.includes(idx2);
+            }
+
+            return false;
+        }
+
+        function handleStickerClick(e, sticker) {
+            e.stopPropagation();
+            if (sticker.classList.contains('cleared') || sticker.classList.contains('selected')) return;
+
+            if (selectedStickers.length > 0) {
+                const last = selectedStickers[selectedStickers.length - 1];
+                if (!isAdjacent3D(last, sticker)) {
+                    showMessage("Letters must be physically adjacent across the 3D grid!");
+                    return;
+                }
+            }
+
+            sticker.classList.add('selected');
+            selectedStickers.push(sticker);
+            updateWordDisplay();
+        }
+
+        function updateWordDisplay() {
+            const word = selectedStickers.map(s => s.textContent).join('');
+            document.getElementById('current-word').textContent = word;
+        }
+
+        function clearSelection() {
+            selectedStickers.forEach(s => s.classList.remove('selected'));
+            selectedStickers = [];
+            updateWordDisplay();
+        }
+
+        function submitWord() {
+            const currentWord = selectedStickers.map(s => s.textContent).join('');
+            
+            if (currentWord.length < 2 || currentWord.length > 12) {
+                showMessage("Words must be between 2 and 12 letters long.");
+                return;
+            }
+
+            if (wordSet.has(currentWord)) {
+                showMessage(`Valid 3D Word: ${currentWord}!`, "#2ed573");
+                selectedStickers.forEach(s => {
+                    s.classList.remove('selected');
+                    s.classList.add('cleared');
+                });
+                selectedStickers = [];
+                updateWordDisplay();
+            } else {
+                showMessage(`"${currentWord}" not found in local dictionary.`, "#ff4757");
+                clearSelection();
+            }
+        }
+
+        function showMessage(txt, color = "#ffd43b") {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = txt;
+            msgEl.style.color = color;
+        }
+
+        // Camera Drag Mechanics
+        const cube = document.getElementById('cube');
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let currentRotation = { x: -25, y: 45 };
+
+        window.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
+            currentRotation.y += deltaMove.x * 0.4;
+            currentRotation.x -= deltaMove.y * 0.4;
+            cube.style.transform = `rotateX(${currentRotation.x}deg) rotateY(${currentRotation.y}deg)`;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', () => isDragging = false);
+    </script>
+</body>
+</html>
