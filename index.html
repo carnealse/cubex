@@ -192,7 +192,7 @@
                 0 0 22px 8px rgba(255, 255, 255, 0.35);
         }
 
-        .sticker.slice-preview::before {
+        .sticker.slice-preview-active::before {
             opacity: 1;
         }
 
@@ -228,7 +228,7 @@
 </head>
 <body>
 
-    <div class="message" id="message">Drag to spin the view. Hover red arrows to preview which slice will turn.</div>
+    <div class="message" id="message">Drag to spin the view. Hover arrows — the glow chases in the direction of the turn.</div>
 
     <div class="cube-stage">
         <div class="rotate-controls" id="rotate-controls" aria-label="Cube rotation controls"></div>
@@ -689,31 +689,85 @@
             });
         }
 
-        function stickersForSlice(axisName, layerVal) {
-            const slice = SLICE_OBJECTS[`${axisName}:${layerVal}`];
-            if (!slice) {
-                return [];
-            }
-            return slice.stickerKeys.map(key => {
-                const [face, idx] = key.split(':');
-                return stickerMap[face][Number(idx)];
+        const SLICE_PREVIEW_STEP_MS = 420;
+
+        let slicePreviewTimer = null;
+
+        function stickerGroupsInSlice(axisName, layerVal) {
+            const axis = CUBE_AXES[axisName];
+            const groups = [];
+            FACE_NAMES.forEach(face => {
+                const inSlice = [];
+                for (let idx = 0; idx < 9; idx++) {
+                    if (Math.abs(vecDot(slotPos(face, idx), axis) - layerVal) > 0.55) {
+                        continue;
+                    }
+                    inSlice.push({
+                        row: Math.floor(idx / 3),
+                        col: idx % 3,
+                        sticker: stickerMap[face][idx]
+                    });
+                }
+                if (inSlice.length !== 3) {
+                    return;
+                }
+                const sameRow = inSlice.every(s => s.row === inSlice[0].row);
+                const sameCol = inSlice.every(s => s.col === inSlice[0].col);
+                if (!sameRow && !sameCol) {
+                    return;
+                }
+                const sorted = inSlice.slice().sort((a, b) => (
+                    sameRow ? a.col - b.col : a.row - b.row
+                ));
+                groups.push(sorted.map(entry => entry.sticker));
             });
+            return groups;
+        }
+
+        function pulseOrderForDirection(kind, screenDir) {
+            if (kind === 'row') {
+                return screenDir === 'right' ? [0, 1, 2] : [2, 1, 0];
+            }
+            return screenDir === 'up' ? [2, 1, 0] : [0, 1, 2];
         }
 
         function clearSlicePreview() {
-            document.querySelectorAll('.sticker.slice-preview').forEach(sticker => {
-                sticker.classList.remove('slice-preview');
+            if (slicePreviewTimer !== null) {
+                clearInterval(slicePreviewTimer);
+                slicePreviewTimer = null;
+            }
+            document.querySelectorAll('.sticker.slice-preview-active').forEach(sticker => {
+                sticker.classList.remove('slice-preview-active');
             });
         }
 
-        function showSlicePreview(kind, line) {
+        function showSlicePreview(kind, line, screenDir) {
             clearSlicePreview();
             const band = pickSlice(kind, line);
-            stickersForSlice(band.axisName, band.layerVal).forEach(sticker => {
-                if (!sticker.classList.contains('cleared')) {
-                    sticker.classList.add('slice-preview');
-                }
-            });
+            const groups = stickerGroupsInSlice(band.axisName, band.layerVal);
+            if (groups.length === 0) {
+                return;
+            }
+
+            const order = pulseOrderForDirection(kind, screenDir);
+            let phase = 0;
+
+            const applyPhase = () => {
+                document.querySelectorAll('.sticker.slice-preview-active').forEach(sticker => {
+                    sticker.classList.remove('slice-preview-active');
+                });
+                const bandPos = order[phase];
+                groups.forEach(stickers => {
+                    const sticker = stickers[bandPos];
+                    if (sticker && !sticker.classList.contains('cleared')) {
+                        sticker.classList.add('slice-preview-active');
+                    }
+                });
+                phase = (phase + 1) % 3;
+            };
+
+            applyPhase();
+            slicePreviewTimer = setInterval(applyPhase, SLICE_PREVIEW_STEP_MS);
         }
 
         function rotateLayer(kind, line, screenDir) {
@@ -742,11 +796,11 @@
                 button.style.left = `${x}px`;
                 button.style.top = `${y}px`;
                 button.addEventListener('mouseenter', () => {
-                    showSlicePreview(kind, line);
+                    showSlicePreview(kind, line, direction);
                 });
                 button.addEventListener('mouseleave', clearSlicePreview);
                 button.addEventListener('focus', () => {
-                    showSlicePreview(kind, line);
+                    showSlicePreview(kind, line, direction);
                 });
                 button.addEventListener('blur', clearSlicePreview);
                 button.addEventListener('mousedown', (e) => {
@@ -755,7 +809,7 @@
                 });
                 button.addEventListener('touchstart', (e) => {
                     e.stopPropagation();
-                    showSlicePreview(kind, line);
+                    showSlicePreview(kind, line, direction);
                 }, { passive: true });
                 button.addEventListener('touchend', clearSlicePreview);
                 button.addEventListener('touchcancel', clearSlicePreview);
@@ -928,6 +982,7 @@
             isDragging = true;
             dragDistance = 0;
             suppressClickAfterDrag = false;
+            clearSlicePreview();
             previousPointer = { x: clientX, y: clientY };
         }
 
