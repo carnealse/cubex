@@ -184,6 +184,7 @@
     <script>
         const letters = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSSSTTTTTTUUUUVVWWXYYZ";
         let selectedStickers = [];
+        let suppressClickAfterDrag = false;
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -274,7 +275,18 @@
 
         function handleStickerClick(e, sticker) {
             e.stopPropagation();
-            if (sticker.classList.contains('cleared') || sticker.classList.contains('selected')) return;
+            if (suppressClickAfterDrag) {
+                suppressClickAfterDrag = false;
+                return;
+            }
+            if (sticker.classList.contains('cleared')) return;
+
+            const selectedIndex = selectedStickers.indexOf(sticker);
+            if (selectedIndex !== -1) {
+                selectedStickers.splice(selectedIndex).forEach(s => s.classList.remove('selected'));
+                updateWordDisplay();
+                return;
+            }
 
             if (selectedStickers.length > 0) {
                 const last = selectedStickers[selectedStickers.length - 1];
@@ -331,24 +343,53 @@
         // Camera Drag Mechanics
         const cube = document.getElementById('cube');
         let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
+        let dragDistance = 0;
+        let previousPointer = { x: 0, y: 0 };
         let currentRotation = { x: -25, y: 45 };
+        const DRAG_CLICK_THRESHOLD = 5;
 
-        window.addEventListener('mousedown', (e) => {
+        function beginDrag(clientX, clientY) {
             isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
+            dragDistance = 0;
+            suppressClickAfterDrag = false;
+            previousPointer = { x: clientX, y: clientY };
+        }
 
-        window.addEventListener('mousemove', (e) => {
+        function updateDrag(clientX, clientY) {
             if (!isDragging) return;
-            const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
+            const deltaMove = {
+                x: clientX - previousPointer.x,
+                y: clientY - previousPointer.y
+            };
+            dragDistance += Math.abs(deltaMove.x) + Math.abs(deltaMove.y);
+            if (dragDistance > DRAG_CLICK_THRESHOLD) {
+                suppressClickAfterDrag = true;
+            }
             currentRotation.y += deltaMove.x * 0.4;
             currentRotation.x -= deltaMove.y * 0.4;
             cube.style.transform = `rotateX(${currentRotation.x}deg) rotateY(${currentRotation.y}deg)`;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
+            previousPointer = { x: clientX, y: clientY };
+        }
 
-        window.addEventListener('mouseup', () => isDragging = false);
+        function endDrag() {
+            isDragging = false;
+        }
+
+        window.addEventListener('mousedown', (e) => beginDrag(e.clientX, e.clientY));
+        window.addEventListener('mousemove', (e) => updateDrag(e.clientX, e.clientY));
+        window.addEventListener('mouseup', endDrag);
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length !== 1) return;
+            beginDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length !== 1) return;
+            updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: true });
+
+        window.addEventListener('touchend', endDrag);
     </script>
 </body>
 </html>
