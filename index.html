@@ -262,15 +262,23 @@
         }
 
         function sliceFromFacelet(face, row, col) {
-            if (SIDE_FACES.includes(face) && row === 0) {
+            const [x, y, z] = worldPos(face, row, col);
+
+            const atTopOrBottom = y > 0.5 || y < -0.5;
+            const onColumnPerimeter = (face === 'top' || face === 'bottom')
+                ? (Math.abs(x) > 0.5 || Math.abs(z) > 0.5)
+                : (SIDE_FACES.includes(face) && atTopOrBottom);
+
+            if (atTopOrBottom && onColumnPerimeter) {
                 return { type: 'column', index: layerIndexFromCoord('X', face, row, col), axis: 'X' };
             }
 
-            if (face === 'top' && (row === 0 || row === 2 || col === 0 || col === 2)) {
-                return { type: 'column', index: layerIndexFromCoord('X', face, row, col), axis: 'X' };
-            }
+            const onVerticalOuterEdge = SIDE_FACES.includes(face) && (
+                ((face === 'front' || face === 'back') && Math.abs(x) > 0.5) ||
+                ((face === 'left' || face === 'right') && Math.abs(z) > 0.5)
+            );
 
-            if (SIDE_FACES.includes(face) && (col === 0 || col === 2)) {
+            if (onVerticalOuterEdge) {
                 return { type: 'row', index: layerIndexFromCoord('Y', face, row, col), axis: 'Y' };
             }
 
