@@ -845,7 +845,12 @@
         });
 
         viewport.addEventListener('pointermove', (event) => {
-            if (event.pointerId !== activePointerId) {
+            if (activePointerId !== null && event.pointerId !== activePointerId) {
+                return;
+            }
+
+            if (activePointerId === null) {
+                updateHoverFromPointer(event.clientX, event.clientY);
                 return;
             }
 
