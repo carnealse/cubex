@@ -465,7 +465,7 @@
             }
 
             const axisName = sliceAxisName(kind);
-            const perm = LAYER_PERM[`${axisName}:${layer}:${sign}`];
+            const perm = LAYER_PERM[`${axisName}:${layer}:${-sign}`];
             if (!perm) {
                 return false;
             }
