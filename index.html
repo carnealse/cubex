@@ -282,12 +282,7 @@
             }
         };
 
-        // --- RUBIK LAYER ROTATION ENGINE ---
-        const FACE_NORMALS = {
-            front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0],
-            left: [-1, 0, 0], top: [0, -1, 0], bottom: [0, 1, 0]
-        };
-
+        // --- LAYER ROTATION ENGINE (precomputed atlas + screen-directed turns) ---
         const FACE_BASIS = {
             front:  { n: [0, 0, 1],  r: [1, 0, 0],  u: [0, 1, 0] },
             back:   { n: [0, 0, -1], r: [-1, 0, 0], u: [0, 1, 0] },
@@ -296,6 +291,24 @@
             top:    { n: [0, -1, 0], r: [1, 0, 0],  u: [0, 0, -1] },
             bottom: { n: [0, 1, 0],  r: [1, 0, 0],  u: [0, 0, 1] }
         };
+
+        const CUBE_AXES = {
+            x: [1, 0, 0],
+            y: [0, 1, 0],
+            z: [0, 0, 1]
+        };
+
+        const ALL_STICKER_SLOTS = (() => {
+            const slots = [];
+            FACE_NAMES.forEach(face => {
+                for (let idx = 0; idx < 9; idx++) {
+                    slots.push({ face, idx, key: `${face}:${idx}`, pos: null });
+                }
+            });
+            return slots;
+        })();
+
+        const LAYER_PERM_ATLAS = {};
 
         function vecDot(a, b) {
             return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -326,6 +339,12 @@
             return vecAdd(vecScale(basis.n, 1.5), vecAdd(vecScale(basis.r, u), vecScale(basis.u, v)));
         }
 
+        function refreshStickerPositions() {
+            ALL_STICKER_SLOTS.forEach(slot => {
+                slot.pos = slotPos(slot.face, slot.idx);
+            });
+        }
+
         function rotateAroundAxis(vec, axis, angle) {
             const [x, y, z] = vec;
             const [ax, ay, az] = axis;
@@ -339,26 +358,89 @@
             ];
         }
 
-        function findSlotAt(pos) {
+        function locateStickerByPosition(pos) {
             let best = null;
             let bestDist = Infinity;
             for (const face of FACE_NAMES) {
                 const basis = FACE_BASIS[face];
-                const align = vecDot(pos, basis.n);
-                if (align > 0.5) {
-                    const rel = vecSub(pos, vecScale(basis.n, 1.5));
-                    const u = vecDot(rel, basis.r);
-                    const v = vecDot(rel, basis.u);
-                    const col = Math.max(0, Math.min(2, Math.round(u + 1)));
-                    const row = Math.max(0, Math.min(2, Math.round(1 - v)));
-                    const dist = Math.abs(u - (col - 1)) + Math.abs(v - (1 - row));
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        best = { face, idx: row * 3 + col };
-                    }
+                if (vecDot(pos, basis.n) <= 0.5) {
+                    continue;
+                }
+                const rel = vecSub(pos, vecScale(basis.n, 1.5));
+                const u = vecDot(rel, basis.r);
+                const v = vecDot(rel, basis.u);
+                const col = Math.max(0, Math.min(2, Math.round(u + 1)));
+                const row = Math.max(0, Math.min(2, Math.round(1 - v)));
+                const dist = Math.abs(u - (col - 1)) + Math.abs(v - (1 - row));
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = { face, idx: row * 3 + col };
                 }
             }
             return best;
+        }
+
+        function identityPerm() {
+            const perm = {};
+            ALL_STICKER_SLOTS.forEach(slot => {
+                perm[slot.key] = slot.key;
+            });
+            return perm;
+        }
+
+        function buildXSlicePerm(layerVal, sign) {
+            const col = layerVal + 1;
+            const flow = {
+                [`front:${col}`]: `top:${col}`,
+                [`top:${col}`]: `back:${col}`,
+                [`back:${col}`]: `bottom:${col}`,
+                [`bottom:${col}`]: `front:${col + 6}`,
+                [`front:${col + 6}`]: `bottom:${col + 6}`,
+                [`bottom:${col + 6}`]: `back:${col + 6}`,
+                [`back:${col + 6}`]: `top:${col + 6}`,
+                [`top:${col + 6}`]: `front:${col}`,
+                [`front:${col + 3}`]: `top:${col + 3}`,
+                [`top:${col + 3}`]: `back:${col + 3}`,
+                [`back:${col + 3}`]: `bottom:${col + 3}`,
+                [`bottom:${col + 3}`]: `front:${col + 3}`
+            };
+            const mapping = sign > 0
+                ? flow
+                : Object.fromEntries(Object.entries(flow).map(([src, dest]) => [dest, src]));
+            const perm = identityPerm();
+            Object.entries(mapping).forEach(([src, dest]) => {
+                perm[dest] = src;
+            });
+            return perm;
+        }
+
+        function buildRodriguesSlicePerm(axisName, layerVal, sign) {
+            const axis = CUBE_AXES[axisName];
+            const angle = sign * Math.PI / 2;
+            const perm = identityPerm();
+            ALL_STICKER_SLOTS.forEach(slot => {
+                if (Math.abs(vecDot(slot.pos, axis) - layerVal) > 0.55) {
+                    return;
+                }
+                const dest = locateStickerByPosition(rotateAroundAxis(slot.pos, axis, angle));
+                if (dest) {
+                    perm[slotKey(dest.face, dest.idx)] = slot.key;
+                }
+            });
+            return perm;
+        }
+
+        function buildLayerPermAtlas() {
+            ['x', 'y', 'z'].forEach(axisName => {
+                [-1, 0, 1].forEach(layerVal => {
+                    [1, -1].forEach(sign => {
+                        const key = `${axisName}:${layerVal}:${sign}`;
+                        LAYER_PERM_ATLAS[key] = axisName === 'x'
+                            ? buildXSlicePerm(layerVal, sign)
+                            : buildRodriguesSlicePerm(axisName, layerVal, sign);
+                    });
+                });
+            });
         }
 
         function transformVector(vec, rxDeg, ryDeg) {
@@ -376,12 +458,6 @@
             return { x, y: y1, z };
         }
 
-        const CUBE_AXES = {
-            x: [1, 0, 0],
-            y: [0, 1, 0],
-            z: [0, 0, 1]
-        };
-
         function inverseTransformVector(vec, rxDeg, ryDeg) {
             const rx = -rxDeg * Math.PI / 180;
             const ry = -ryDeg * Math.PI / 180;
@@ -397,158 +473,102 @@
         }
 
         function nearestCubeAxis(vec) {
-            let bestName = 'x';
+            let axisName = 'x';
             let bestAbs = -1;
-            let bestSign = 1;
+            let sign = 1;
             for (const [name, axis] of Object.entries(CUBE_AXES)) {
                 const dot = vecDot(vec, axis);
                 const abs = Math.abs(dot);
                 if (abs > bestAbs) {
                     bestAbs = abs;
-                    bestName = name;
-                    bestSign = dot >= 0 ? 1 : -1;
+                    axisName = name;
+                    sign = dot >= 0 ? 1 : -1;
                 }
             }
             return {
-                name: bestName,
-                axis: vecScale(CUBE_AXES[bestName], bestSign),
-                layerAxis: CUBE_AXES[bestName]
+                axisName,
+                layerAxis: CUBE_AXES[axisName],
+                rotAxis: vecScale(CUBE_AXES[axisName], sign)
             };
         }
 
-        function pickCubeLayer(kind, line) {
+        function stickersInLayer(layerAxis, layerVal) {
+            return ALL_STICKER_SLOTS.filter(slot => Math.abs(vecDot(slot.pos, layerAxis) - layerVal) < 0.55);
+        }
+
+        function pickSliceFromScreen(kind, line) {
             const screenRight = inverseTransformVector({ x: 1, y: 0, z: 0 }, currentRotation.x, currentRotation.y);
             const screenUp = inverseTransformVector({ x: 0, y: -1, z: 0 }, currentRotation.x, currentRotation.y);
             const orient = nearestCubeAxis(kind === 'col' ? screenRight : screenUp);
             const targetLine = line - 1;
-            let bestVal = 0;
+            let layerVal = 0;
             let bestScore = Infinity;
 
-            for (const val of [-1, 0, 1]) {
+            [-1, 0, 1].forEach(val => {
+                const layer = stickersInLayer(orient.layerAxis, val);
+                if (!layer.length) {
+                    return;
+                }
                 let sum = 0;
-                let count = 0;
-                FACE_NAMES.forEach(face => {
-                    for (let idx = 0; idx < 9; idx++) {
-                        const pos = slotPos(face, idx);
-                        if (Math.abs(vecDot(pos, orient.layerAxis) - val) > 0.55) {
-                            return;
-                        }
-                        const view = transformVector(pos, currentRotation.x, currentRotation.y);
-                        sum += kind === 'col' ? view.x : view.y;
-                        count++;
-                    }
+                layer.forEach(slot => {
+                    const view = transformVector(slot.pos, currentRotation.x, currentRotation.y);
+                    sum += kind === 'col' ? view.x : view.y;
                 });
-                const score = Math.abs((sum / Math.max(count, 1)) - targetLine);
+                const score = Math.abs(sum / layer.length - targetLine);
                 if (score < bestScore) {
                     bestScore = score;
-                    bestVal = val;
-                }
-            }
-
-            return {
-                axisName: orient.name,
-                layerAxis: orient.layerAxis,
-                layerVal: bestVal,
-                rotAxis: orient.axis
-            };
-        }
-
-        function resolveAngleSign(kind, line, screenDir, layerInfo) {
-            const { rotAxis, layerAxis, layerVal } = layerInfo;
-            const screenX = kind === 'col' ? 0 : (screenDir === 'right' ? 1 : -1);
-            const screenY = kind === 'col' ? (screenDir === 'up' ? -1 : 1) : 0;
-            let testPos = null;
-            let bestZ = -Infinity;
-
-            FACE_NAMES.forEach(face => {
-                for (let idx = 0; idx < 9; idx++) {
-                    const pos = slotPos(face, idx);
-                    if (Math.abs(vecDot(pos, layerAxis) - layerVal) > 0.55) {
-                        return;
-                    }
-                    const view = transformVector(pos, currentRotation.x, currentRotation.y);
-                    if (view.z > bestZ) {
-                        bestZ = view.z;
-                        testPos = pos;
-                    }
+                    layerVal = val;
                 }
             });
 
-            if (!testPos) {
+            return {
+                axisName: orient.axisName,
+                layerAxis: orient.layerAxis,
+                layerVal,
+                rotAxis: orient.rotAxis
+            };
+        }
+
+        function pickSliceSign(kind, line, screenDir, slice) {
+            const targetLine = line - 1;
+            const candidates = stickersInLayer(slice.layerAxis, slice.layerVal)
+                .map(slot => {
+                    const view = transformVector(slot.pos, currentRotation.x, currentRotation.y);
+                    const bandDist = Math.abs((kind === 'col' ? view.x : view.y) - targetLine);
+                    return { slot, view, bandDist };
+                })
+                .filter(entry => entry.view.z > -0.5)
+                .sort((a, b) => a.bandDist - b.bandDist || b.view.z - a.view.z);
+
+            const testSlot = candidates[0]?.slot || stickersInLayer(slice.layerAxis, slice.layerVal)[0];
+            if (!testSlot) {
                 return 1;
             }
 
-            const startView = transformVector(testPos, currentRotation.x, currentRotation.y);
-            const score = (sign) => {
-                const endPos = rotateAroundAxis(testPos, rotAxis, sign * Math.PI / 2);
+            const startView = transformVector(testSlot.pos, currentRotation.x, currentRotation.y);
+            const screenScore = (sign) => {
+                const endPos = rotateAroundAxis(testSlot.pos, slice.rotAxis, sign * Math.PI / 2);
                 const endView = transformVector(endPos, currentRotation.x, currentRotation.y);
-                return (endView.x - startView.x) * screenX + (endView.y - startView.y) * screenY;
+                if (kind === 'col') {
+                    const dy = endView.y - startView.y;
+                    return screenDir === 'up' ? -dy : dy;
+                }
+                const dx = endView.x - startView.x;
+                return screenDir === 'right' ? dx : -dx;
             };
-            return score(1) >= score(-1) ? 1 : -1;
-        }
 
-        function buildXLayerPerm(layerVal, clockwise) {
-            const col = layerVal + 1;
-            const flow = {
-                [`front:${col}`]: `top:${col}`,
-                [`top:${col}`]: `back:${col}`,
-                [`back:${col}`]: `bottom:${col}`,
-                [`bottom:${col}`]: `front:${col + 6}`,
-                [`front:${col + 6}`]: `bottom:${col + 6}`,
-                [`bottom:${col + 6}`]: `back:${col + 6}`,
-                [`back:${col + 6}`]: `top:${col + 6}`,
-                [`top:${col + 6}`]: `front:${col}`,
-                [`front:${col + 3}`]: `top:${col + 3}`,
-                [`top:${col + 3}`]: `back:${col + 3}`,
-                [`back:${col + 3}`]: `bottom:${col + 3}`,
-                [`bottom:${col + 3}`]: `front:${col + 3}`
-            };
-            const mapping = clockwise ? flow : Object.fromEntries(
-                Object.entries(flow).map(([src, dest]) => [dest, src])
-            );
-            const perm = {};
-            FACE_NAMES.forEach(face => {
-                for (let idx = 0; idx < 9; idx++) {
-                    perm[slotKey(face, idx)] = slotKey(face, idx);
-                }
-            });
-            Object.entries(mapping).forEach(([src, dest]) => {
-                perm[dest] = src;
-            });
-            return perm;
-        }
-
-        function build3DRotationPerm(layerAxis, layerVal, rotAxis, angleSign) {
-            const angle = angleSign * Math.PI / 2;
-            const allSlots = [];
-            FACE_NAMES.forEach(face => {
-                for (let idx = 0; idx < 9; idx++) {
-                    allSlots.push({ face, idx, key: slotKey(face, idx), pos: slotPos(face, idx) });
-                }
-            });
-            const layerSlots = allSlots.filter(slot => Math.abs(vecDot(slot.pos, layerAxis) - layerVal) < 0.55);
-            const perm = {};
-            allSlots.forEach(slot => {
-                perm[slot.key] = slot.key;
-            });
-            layerSlots.forEach(slot => {
-                const target = findSlotAt(rotateAroundAxis(slot.pos, rotAxis, angle));
-                if (target) {
-                    perm[slotKey(target.face, target.idx)] = slot.key;
-                }
-            });
-            return perm;
+            return screenScore(1) > screenScore(-1) ? 1 : -1;
         }
 
         function computeLayerMove(kind, line, screenDir) {
-            const layerInfo = pickCubeLayer(kind, line);
-            const angleSign = resolveAngleSign(kind, line, screenDir, layerInfo);
-            const clockwise = angleSign > 0;
-            const perm = layerInfo.axisName === 'x'
-                ? buildXLayerPerm(layerInfo.layerVal, clockwise)
-                : build3DRotationPerm(layerInfo.layerAxis, layerInfo.layerVal, layerInfo.rotAxis, angleSign);
-            return { perm };
+            const slice = pickSliceFromScreen(kind, line);
+            const sign = pickSliceSign(kind, line, screenDir, slice);
+            const perm = LAYER_PERM_ATLAS[`${slice.axisName}:${slice.layerVal}:${sign}`];
+            return { perm: perm || identityPerm() };
         }
+
+        refreshStickerPositions();
+        buildLayerPermAtlas();
 
         function applyPermutation(perm) {
             const snapshot = {};
