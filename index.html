@@ -515,7 +515,9 @@
             return controlFace;
         }
 
-        const SLICE_OBJECTS = (() => {
+        let SLICE_OBJECTS = {};
+
+        function buildSliceObjects() {
             const slices = {};
             ['x', 'y', 'z'].forEach(axisName => {
                 [-1, 0, 1].forEach(layerVal => {
@@ -532,7 +534,7 @@
                 });
             });
             return slices;
-        })();
+        }
 
         function pickSlice(kind, line) {
             const face = getControlFace(kind);
@@ -626,7 +628,7 @@
 
         refreshStickerPositions();
         buildLayerPermAtlas();
-        // SLICE_OBJECTS references LAYER_PERM_ATLAS; defined after atlas build.
+        SLICE_OBJECTS = buildSliceObjects();
 
         function applyPermutation(perm) {
             const snapshot = {};
