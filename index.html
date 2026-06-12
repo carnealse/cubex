@@ -18,6 +18,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            padding-bottom: 220px;
             overflow: hidden;
             user-select: none;
             font-family: system-ui, -apple-system, sans-serif;
@@ -26,7 +27,7 @@
 
         .ui-container {
             position: absolute;
-            bottom: 80px;
+            bottom: 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -90,7 +91,6 @@
             position: relative;
             width: 460px;
             height: 460px;
-            margin-bottom: 150px;
         }
 
         .scene {
@@ -213,11 +213,11 @@
         }
 
         .sticker.slice-preview-active {
-            z-index: 2;
+            z-index: 5;
             box-shadow:
-                0 0 0 2px rgba(255, 255, 255, 0.95),
-                0 0 14px 5px rgba(255, 255, 255, 0.9),
-                0 0 28px 10px rgba(255, 255, 255, 0.5);
+                0 0 0 3px rgba(255, 255, 255, 1),
+                0 0 18px 6px rgba(255, 255, 255, 0.95),
+                0 0 36px 12px rgba(255, 255, 255, 0.65);
         }
 
         .sticker.selected {
@@ -730,29 +730,22 @@
             return view.z > 0.05;
         }
 
-        function bandScreenAlignment(stickers, kind) {
-            const rxDeg = currentRotation.x;
-            const ryDeg = currentRotation.y;
-            const views = stickers.map(sticker => {
-                const face = sticker.dataset.face;
-                const idx = Number(sticker.dataset.index);
-                return viewTransform(slotPos(face, idx), rxDeg, ryDeg);
+        function addBandStickers(stickers, seen, face, kind, bandLine) {
+            bandIndices(kind, bandLine).forEach(idx => {
+                const sticker = stickerMap[face][idx];
+                if (!sticker || sticker.classList.contains('cleared')) {
+                    return;
+                }
+                const key = stickerKey(sticker);
+                if (seen.has(key)) {
+                    return;
+                }
+                seen.add(key);
+                stickers.push(sticker);
             });
-            const xs = views.map(point => point.x);
-            const ys = views.map(point => point.y);
-            const spreadX = Math.max(...xs) - Math.min(...xs);
-            const spreadY = Math.max(...ys) - Math.min(...ys);
-            if (kind === 'row') {
-                return { score: spreadX / (spreadY + 1e-6), views };
-            }
-            return { score: spreadY / (spreadX + 1e-6), views };
         }
 
-        function getSlicePreviewStickers(kind, line) {
-            const band = pickSlice(kind, line);
-            const alongAxis = kind === 'row' ? 'x' : 'y';
-            const candidates = [];
-
+        function collectPhysicalSliceBands(band, kind, stickers, seen) {
             for (const face of FACE_NAMES) {
                 if (!isFaceTowardCamera(face)) {
                     continue;
@@ -762,36 +755,21 @@
                     if (layer.axisName !== band.axisName || layer.layerVal !== band.layerVal) {
                         continue;
                     }
-                    const stickers = bandIndices(kind, bandLine)
-                        .map(idx => stickerMap[face][idx])
-                        .filter(sticker => sticker && !sticker.classList.contains('cleared'));
-                    if (stickers.length !== 3) {
-                        continue;
-                    }
-                    const { score, views } = bandScreenAlignment(stickers, kind);
-                    if (score < 1.2) {
-                        continue;
-                    }
-                    const avgAlong = views.reduce((sum, view) => sum + view[alongAxis], 0) / views.length;
-                    candidates.push({ stickers, views, avgAlong });
+                    addBandStickers(stickers, seen, face, kind, bandLine);
                 }
             }
+        }
 
-            if (candidates.length === 0) {
-                const fallback = bandIndices(kind, band.line)
-                    .map(idx => stickerMap[band.face][idx])
-                    .filter(sticker => sticker && !sticker.classList.contains('cleared'));
-                return { band, stickers: fallback };
-            }
-
-            candidates.sort((a, b) => a.avgAlong - b.avgAlong);
+        function getSlicePreviewStickers(kind, line) {
+            const band = pickSlice(kind, line);
             const stickers = [];
-            candidates.forEach(candidate => {
-                candidate.stickers
-                    .map((sticker, index) => ({ sticker, view: candidate.views[index] }))
-                    .sort((a, b) => a.view[alongAxis] - b.view[alongAxis])
-                    .forEach(entry => stickers.push(entry.sticker));
-            });
+            const seen = new Set();
+
+            collectPhysicalSliceBands(band, kind, stickers, seen);
+
+            if (stickers.length === 0) {
+                addBandStickers(stickers, seen, band.face, kind, band.line);
+            }
 
             return { band, stickers };
         }
@@ -801,29 +779,50 @@
                 return [];
             }
 
-            const towardScreen = screenDir === 'up' || screenDir === 'right';
-            const alongAxis = kind === 'row' ? 'x' : 'y';
-            const rxDeg = currentRotation.x;
-            const ryDeg = currentRotation.y;
             const sign = pickTurnSign(kind, screenDir, band);
             const rotAxis = CUBE_AXES[band.axisName];
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
 
             const scored = stickers.map(sticker => {
                 const pos = slotPos(sticker.dataset.face, Number(sticker.dataset.index));
                 const start = viewTransform(pos, rxDeg, ryDeg);
                 const end = viewTransform(rotateAroundAxis(pos, rotAxis, sign * Math.PI / 2), rxDeg, ryDeg);
-                const motion = end[alongAxis] - start[alongAxis];
-                return { sticker, coord: start[alongAxis], motion };
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                return { sticker, start, dx, dy };
             });
 
-            scored.sort((a, b) => (
-                towardScreen ? a.coord - b.coord : b.coord - a.coord
-            ));
+            const avgDx = scored.reduce((sum, entry) => sum + entry.dx, 0) / scored.length;
+            const avgDy = scored.reduce((sum, entry) => sum + entry.dy, 0) / scored.length;
+            const motionLen = Math.hypot(avgDx, avgDy);
+            const screenAxis = kind === 'row' ? 'x' : 'y';
+            const toward = screenDir === 'right' || screenDir === 'up';
 
-            const avgMotion = scored.reduce((sum, entry) => sum + entry.motion, 0) / scored.length;
-            const chaseForward = towardScreen ? avgMotion >= 0 : avgMotion <= 0;
-            if (!chaseForward) {
-                scored.reverse();
+            if (motionLen < 1e-4) {
+                scored.sort((a, b) => {
+                    const ca = a.start[screenAxis];
+                    const cb = b.start[screenAxis];
+                    return toward ? ca - cb : cb - ca;
+                });
+            } else {
+                const motionX = avgDx / motionLen;
+                const motionY = avgDy / motionLen;
+
+                scored.sort((a, b) => {
+                    const projA = a.start.x * motionX + a.start.y * motionY;
+                    const projB = b.start.x * motionX + b.start.y * motionY;
+                    return projA - projB;
+                });
+
+                const firstCoord = scored[0].start[screenAxis];
+                const lastCoord = scored[scored.length - 1].start[screenAxis];
+                if (Math.abs(lastCoord - firstCoord) > 0.05) {
+                    const screenIncreasing = lastCoord > firstCoord;
+                    if (toward !== screenIncreasing) {
+                        scored.reverse();
+                    }
+                }
             }
 
             return scored.map(entry => entry.sticker);
