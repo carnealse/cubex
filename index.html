@@ -690,70 +690,128 @@
                 .filter(sticker => !sticker.classList.contains('cleared'));
         }
 
-        function visibleStickersInPhysicalSlice(axisName, layerVal) {
-            const slice = SLICE_OBJECTS[`${axisName}:${layerVal}`];
-            if (!slice) {
-                return [];
+        function bandScreenAlignmentScore(stickers, kind) {
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
+            const views = stickers.map(sticker => {
+                const face = sticker.dataset.face;
+                const idx = Number(sticker.dataset.index);
+                return viewTransform(slotPos(face, idx), rxDeg, ryDeg);
+            });
+            const xs = views.map(point => point.x);
+            const ys = views.map(point => point.y);
+            const spreadX = Math.max(...xs) - Math.min(...xs);
+            const spreadY = Math.max(...ys) - Math.min(...ys);
+            if (kind === 'col') {
+                return spreadY / (spreadX + 1e-6);
             }
-            return slice.stickerKeys
-                .map(key => {
-                    const [face, idx] = key.split(':');
-                    return stickerMap[face]?.[Number(idx)];
-                })
-                .filter(sticker => sticker && !sticker.classList.contains('cleared') && isStickerFacingCamera(sticker));
+            return spreadX / (spreadY + 1e-6);
         }
 
-        function visibleBandOnFace(face, kind, line, band) {
-            const layer = bandLayerFromFace(face, kind, line);
-            if (layer.axisName !== band.axisName || layer.layerVal !== band.layerVal) {
-                return [];
+        function averageStickerScreenCoord(stickers, axis) {
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
+            const total = stickers.reduce((sum, sticker) => {
+                const view = viewTransform(
+                    slotPos(sticker.dataset.face, Number(sticker.dataset.index)),
+                    rxDeg,
+                    ryDeg
+                );
+                return sum + view[axis];
+            }, 0);
+            return total / stickers.length;
+        }
+
+        function averageStickerDepth(stickers) {
+            const rxDeg = currentRotation.x;
+            const ryDeg = currentRotation.y;
+            return stickers.reduce((sum, sticker) => {
+                const view = viewTransform(
+                    slotPos(sticker.dataset.face, Number(sticker.dataset.index)),
+                    rxDeg,
+                    ryDeg
+                );
+                return sum + view.z;
+            }, 0) / stickers.length;
+        }
+
+        function collectPreviewBandCandidates(kind, band) {
+            const candidates = [];
+            for (const face of FACE_NAMES) {
+                for (let bandLine = 0; bandLine < 3; bandLine++) {
+                    const layer = bandLayerFromFace(face, kind, bandLine);
+                    if (layer.axisName !== band.axisName || layer.layerVal !== band.layerVal) {
+                        continue;
+                    }
+                    const stickers = controlFaceBandStickers(face, kind, bandLine)
+                        .filter(isStickerFacingCamera);
+                    if (stickers.length !== 3) {
+                        continue;
+                    }
+                    const alignment = bandScreenAlignmentScore(stickers, kind);
+                    if (alignment < 1.2) {
+                        continue;
+                    }
+                    candidates.push({ stickers, alignment });
+                }
             }
-            return controlFaceBandStickers(face, kind, line).filter(isStickerFacingCamera);
+            return candidates;
+        }
+
+        function pickBestPreviewBand(candidates, kind, line) {
+            const crossAxis = kind === 'col' ? 'x' : 'y';
+            const coords = candidates.map(candidate => averageStickerScreenCoord(candidate.stickers, crossAxis));
+            const minCoord = Math.min(...coords);
+            const maxCoord = Math.max(...coords);
+            const targetCoord = line === 0
+                ? minCoord
+                : line === 2
+                    ? maxCoord
+                    : (minCoord + maxCoord) / 2;
+
+            candidates.sort((a, b) => {
+                if (Math.abs(a.alignment - b.alignment) > 0.15) {
+                    return b.alignment - a.alignment;
+                }
+                const posA = Math.abs(averageStickerScreenCoord(a.stickers, crossAxis) - targetCoord);
+                const posB = Math.abs(averageStickerScreenCoord(b.stickers, crossAxis) - targetCoord);
+                if (Math.abs(posA - posB) > 0.05) {
+                    return posA - posB;
+                }
+                return averageStickerDepth(b.stickers) - averageStickerDepth(a.stickers);
+            });
+
+            return candidates[0].stickers;
         }
 
         function getPreviewStickers(kind, line) {
             const band = pickSlice(kind, line);
-            const facesByVisibility = FACE_NAMES
-                .map(face => ({ face, stickers: visibleBandOnFace(face, kind, line, band) }))
-                .filter(entry => entry.stickers.length > 0)
-                .sort((a, b) => {
-                    const avgZ = stickers => stickers.reduce((sum, sticker) => {
-                        const view = viewTransform(
-                            slotPos(sticker.dataset.face, Number(sticker.dataset.index)),
-                            currentRotation.x,
-                            currentRotation.y
-                        );
-                        return sum + view.z;
-                    }, 0) / stickers.length;
-                    return avgZ(b.stickers) - avgZ(a.stickers);
-                });
-
-            if (facesByVisibility.length > 0) {
-                return facesByVisibility[0].stickers;
+            const candidates = collectPreviewBandCandidates(kind, band);
+            if (candidates.length === 0) {
+                return [];
             }
-
-            return visibleStickersInPhysicalSlice(band.axisName, band.layerVal);
+            return pickBestPreviewBand(candidates, kind, line);
         }
 
-        function sortBandStickersOnScreen(stickers, kind) {
+        function orderStickersForPreviewChase(kind, screenDir, band, stickers) {
+            const chaseAxis = kind === 'col' ? 'y' : 'x';
+            const towardScreen = screenDir === 'up' || screenDir === 'right';
             const rxDeg = currentRotation.x;
             const ryDeg = currentRotation.y;
-            const withScreen = stickers.map(sticker => {
-                const face = sticker.dataset.face;
-                const idx = Number(sticker.dataset.index);
-                const view = viewTransform(slotPos(face, idx), rxDeg, ryDeg);
-                return { sticker, view };
-            });
-            withScreen.sort((a, b) => (
-                kind === 'row' ? a.view.x - b.view.x : b.view.y - a.view.y
-            ));
-            return withScreen.map(entry => entry.sticker);
-        }
 
-        function buildPulseSequence(stickerCount, kind, screenDir) {
-            const indices = Array.from({ length: stickerCount }, (_, index) => index);
-            const forward = kind === 'row' ? screenDir === 'right' : screenDir === 'up';
-            return forward ? indices : indices.slice().reverse();
+            const scored = stickers.map(sticker => {
+                const pos = slotPos(sticker.dataset.face, Number(sticker.dataset.index));
+                const start = viewTransform(pos, rxDeg, ryDeg);
+                return { sticker, start };
+            });
+
+            scored.sort((a, b) => (
+                towardScreen
+                    ? a.start[chaseAxis] - b.start[chaseAxis]
+                    : b.start[chaseAxis] - a.start[chaseAxis]
+            ));
+
+            return scored.map(entry => entry.sticker);
         }
 
         function clearSlicePreview() {
@@ -771,12 +829,16 @@
             if (!SLICE_OBJECTS || !Object.keys(SLICE_OBJECTS).length) {
                 return;
             }
-            const stickers = sortBandStickersOnScreen(getPreviewStickers(kind, line), kind);
+            const band = pickSlice(kind, line);
+            const stickers = orderStickersForPreviewChase(
+                kind,
+                screenDir,
+                band,
+                getPreviewStickers(kind, line)
+            );
             if (stickers.length === 0) {
                 return;
             }
-
-            const order = buildPulseSequence(stickers.length, kind, screenDir);
 
             let phase = 0;
 
@@ -784,11 +846,11 @@
                 document.querySelectorAll('.sticker.slice-preview-active').forEach(sticker => {
                     sticker.classList.remove('slice-preview-active');
                 });
-                const sticker = stickers[order[phase]];
+                const sticker = stickers[phase];
                 if (sticker) {
                     sticker.classList.add('slice-preview-active');
                 }
-                phase = (phase + 1) % order.length;
+                phase = (phase + 1) % stickers.length;
             };
 
             applyPhase();
