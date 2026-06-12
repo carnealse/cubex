@@ -157,6 +157,8 @@
         }
 
         .sticker {
+            position: relative;
+            isolation: isolate;
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -168,6 +170,30 @@
             cursor: pointer;
             pointer-events: auto;
             transition: transform 0.1s, opacity 0.3s;
+        }
+
+        .sticker::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 6px;
+            z-index: -1;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease-out;
+            background: radial-gradient(
+                ellipse at center,
+                rgba(255, 255, 255, 0.55) 0%,
+                rgba(255, 255, 255, 0.2) 45%,
+                transparent 72%
+            );
+            box-shadow:
+                0 0 10px 3px rgba(255, 255, 255, 0.65),
+                0 0 22px 8px rgba(255, 255, 255, 0.35);
+        }
+
+        .sticker.slice-preview::before {
+            opacity: 1;
         }
 
         .sticker.selected {
@@ -202,7 +228,7 @@
 </head>
 <body>
 
-    <div class="message" id="message">Drag to spin the view. Use red arrows to rotate rows and columns.</div>
+    <div class="message" id="message">Drag to spin the view. Hover red arrows to preview which slice will turn.</div>
 
     <div class="cube-stage">
         <div class="rotate-controls" id="rotate-controls" aria-label="Cube rotation controls"></div>
@@ -663,11 +689,39 @@
             });
         }
 
+        function stickersForSlice(axisName, layerVal) {
+            const slice = SLICE_OBJECTS[`${axisName}:${layerVal}`];
+            if (!slice) {
+                return [];
+            }
+            return slice.stickerKeys.map(key => {
+                const [face, idx] = key.split(':');
+                return stickerMap[face][Number(idx)];
+            });
+        }
+
+        function clearSlicePreview() {
+            document.querySelectorAll('.sticker.slice-preview').forEach(sticker => {
+                sticker.classList.remove('slice-preview');
+            });
+        }
+
+        function showSlicePreview(kind, line) {
+            clearSlicePreview();
+            const band = pickSlice(kind, line);
+            stickersForSlice(band.axisName, band.layerVal).forEach(sticker => {
+                if (!sticker.classList.contains('cleared')) {
+                    sticker.classList.add('slice-preview');
+                }
+            });
+        }
+
         function rotateLayer(kind, line, screenDir) {
             if (isLayerRotating) return;
             isLayerRotating = true;
             suppressClickAfterDrag = false;
             clearSelection();
+            clearSlicePreview();
 
             const move = computeLayerMove(kind, line, screenDir);
             applyPermutation(move.perm);
@@ -687,13 +741,24 @@
                 button.title = `Rotate ${kind} ${line + 1} toward screen ${direction}`;
                 button.style.left = `${x}px`;
                 button.style.top = `${y}px`;
+                button.addEventListener('mouseenter', () => {
+                    showSlicePreview(kind, line);
+                });
+                button.addEventListener('mouseleave', clearSlicePreview);
+                button.addEventListener('focus', () => {
+                    showSlicePreview(kind, line);
+                });
+                button.addEventListener('blur', clearSlicePreview);
                 button.addEventListener('mousedown', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
                 });
                 button.addEventListener('touchstart', (e) => {
                     e.stopPropagation();
+                    showSlicePreview(kind, line);
                 }, { passive: true });
+                button.addEventListener('touchend', clearSlicePreview);
+                button.addEventListener('touchcancel', clearSlicePreview);
                 button.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
