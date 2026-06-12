@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORDS_FILE = ROOT / "page" / "cubex_words.txt"
-OUTPUT_FILE = ROOT / "page" / "cubex_dictionary.js"
+OUTPUT_FILE = ROOT / "cubex_dictionary.js"
 MIN_LEN = 2
 MAX_LEN = 12
 
