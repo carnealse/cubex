@@ -88,24 +88,26 @@
 
         .cube-stage {
             position: relative;
-            width: 360px;
-            height: 360px;
+            width: 420px;
+            height: 420px;
             margin-bottom: 100px;
         }
 
         .scene {
             position: absolute;
-            top: 75px;
-            left: 75px;
+            top: 105px;
+            left: 105px;
             width: 210px;
             height: 210px;
             perspective: 600px;
+            pointer-events: none;
+            z-index: 1;
         }
 
         .rotate-controls {
             position: absolute;
             inset: 0;
-            z-index: 5;
+            z-index: 20;
             pointer-events: none;
         }
 
@@ -164,6 +166,7 @@
             color: #000000;
             text-transform: uppercase;
             cursor: pointer;
+            pointer-events: auto;
             transition: transform 0.1s, opacity 0.3s;
         }
 
@@ -233,9 +236,9 @@
         let suppressClickAfterDrag = false;
         let isLayerRotating = false;
         let currentRotation = { x: -25, y: 45 };
-        const STAGE_SIZE = 360;
-        const SCENE_OFFSET = 75;
-        const ARROW_INSET = 18;
+        const STAGE_SIZE = 420;
+        const SCENE_OFFSET = 105;
+        const ARROW_INSET = 6;
 
         // --- 3D ADJACENCY MAP (THE RUBIK HINGE MATH) ---
         // Maps the boundary rows/columns of each face to their neighbor coordinates
@@ -396,7 +399,9 @@
         function transformVector(vec, rxDeg, ryDeg) {
             const rx = rxDeg * Math.PI / 180;
             const ry = ryDeg * Math.PI / 180;
-            let [x, y, z] = vec;
+            let x = Array.isArray(vec) ? vec[0] : vec.x;
+            let y = Array.isArray(vec) ? vec[1] : vec.y;
+            let z = Array.isArray(vec) ? vec[2] : vec.z;
             const x1 = x * Math.cos(ry) + z * Math.sin(ry);
             const z1 = -x * Math.sin(ry) + z * Math.cos(ry);
             x = x1;
@@ -414,11 +419,7 @@
             let dominant = 'front';
             let bestZ = -Infinity;
             for (const face of FACE_NAMES) {
-                const rotated = transformVector(
-                    { x: FACE_NORMALS[face][0], y: FACE_NORMALS[face][1], z: FACE_NORMALS[face][2] },
-                    currentRotation.x,
-                    currentRotation.y
-                );
+                const rotated = transformVector(FACE_NORMALS[face], currentRotation.x, currentRotation.y);
                 if (rotated.z > bestZ) {
                     bestZ = rotated.z;
                     dominant = face;
@@ -428,10 +429,9 @@
         }
 
         function getFaceBasisInView(face) {
-            const toVec = (v) => transformVector({ x: v[0], y: v[1], z: v[2] }, currentRotation.x, currentRotation.y);
             return {
-                right: toVec(FACE_RIGHT[face]),
-                up: toVec(FACE_UP[face])
+                right: transformVector(FACE_RIGHT[face], currentRotation.x, currentRotation.y),
+                up: transformVector(FACE_UP[face], currentRotation.x, currentRotation.y)
             };
         }
 
@@ -491,11 +491,16 @@
         function rotateLayer(kind, line, screenDir) {
             if (isLayerRotating) return;
             isLayerRotating = true;
+            suppressClickAfterDrag = false;
             clearSelection();
             const dominantFace = getDominantFace();
             const moveKey = kind === 'row'
                 ? resolveRowMove(line, screenDir)
                 : resolveColMove(line, screenDir);
+            if (!FRONT_MOVES[moveKey]) {
+                isLayerRotating = false;
+                return;
+            }
             applyFrontMove(moveKey, dominantFace);
             renderCube();
             isLayerRotating = false;
@@ -513,11 +518,16 @@
                 button.title = `Rotate ${kind} ${line + 1} toward screen ${direction}`;
                 button.style.left = `${x}px`;
                 button.style.top = `${y}px`;
-                button.addEventListener('mousedown', (e) => e.stopPropagation());
-                button.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+                button.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                });
+                button.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
                 button.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    suppressClickAfterDrag = false;
+                    e.preventDefault();
                     rotateLayer(kind, line, direction);
                 });
                 container.appendChild(button);
