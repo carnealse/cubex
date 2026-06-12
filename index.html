@@ -281,7 +281,7 @@
             }
         };
 
-        // --- LAYER ROTATION ENGINE (arrow-anchored slices + precomputed atlas) ---
+        // --- SLICE ROTATION ENGINE (18 slice objects, 3D-accurate permutations) ---
         const FACE_BASIS = {
             front:  { n: [0, 0, 1],  r: [1, 0, 0],  u: [0, 1, 0] },
             back:   { n: [0, 0, -1], r: [-1, 0, 0], u: [0, 1, 0] },
@@ -316,8 +316,6 @@
             top:    { col: 'x', row: 'z' },
             bottom: { col: 'x', row: 'z' }
         };
-        const PERSPECTIVE = 600;
-
         function vecDot(a, b) {
             return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
         }
@@ -396,32 +394,6 @@
             return perm;
         }
 
-        function buildXSlicePerm(layerVal, sign) {
-            const col = layerVal + 1;
-            const flow = {
-                [`front:${col}`]: `top:${col}`,
-                [`top:${col}`]: `back:${col}`,
-                [`back:${col}`]: `bottom:${col}`,
-                [`bottom:${col}`]: `front:${col + 6}`,
-                [`front:${col + 6}`]: `bottom:${col + 6}`,
-                [`bottom:${col + 6}`]: `back:${col + 6}`,
-                [`back:${col + 6}`]: `top:${col + 6}`,
-                [`top:${col + 6}`]: `front:${col}`,
-                [`front:${col + 3}`]: `top:${col + 3}`,
-                [`top:${col + 3}`]: `back:${col + 3}`,
-                [`back:${col + 3}`]: `bottom:${col + 3}`,
-                [`bottom:${col + 3}`]: `front:${col + 3}`
-            };
-            const mapping = sign > 0
-                ? flow
-                : Object.fromEntries(Object.entries(flow).map(([src, dest]) => [dest, src]));
-            const perm = identityPerm();
-            Object.entries(mapping).forEach(([src, dest]) => {
-                perm[dest] = src;
-            });
-            return perm;
-        }
-
         function buildRodriguesSlicePerm(axisName, layerVal, sign) {
             const axis = CUBE_AXES[axisName];
             const angle = sign * Math.PI / 2;
@@ -463,9 +435,7 @@
                 [-1, 0, 1].forEach(layerVal => {
                     [1, -1].forEach(sign => {
                         const key = `${axisName}:${layerVal}:${sign}`;
-                        const perm = axisName === 'x'
-                            ? buildXSlicePerm(layerVal, sign)
-                            : buildRodriguesSlicePerm(axisName, layerVal, sign);
+                        const perm = buildRodriguesSlicePerm(axisName, layerVal, sign);
                         validateLayerPerm(perm, axisName, layerVal);
                         LAYER_PERM_ATLAS[key] = perm;
                     });
@@ -507,19 +477,6 @@
             return { x: x1, y, z };
         }
 
-        function projectStickerToScreen(pos, rxDeg, ryDeg) {
-            const view = viewTransform(pos, rxDeg, ryDeg);
-            const scale = 210 / 3;
-            const depth = PERSPECTIVE - view.z * scale;
-            const factor = depth > 1 ? PERSPECTIVE / depth : 1;
-            const center = SCENE_OFFSET + 105;
-            return {
-                sx: center + view.x * scale * factor,
-                sy: center - view.y * scale * factor,
-                z: view.z
-            };
-        }
-
         function bandLayerFromFace(face, kind, line) {
             const midIdx = kind === 'col' ? line + 3 : line * 3 + 1;
             const axisName = FACE_BAND_AXIS[face][kind];
@@ -527,114 +484,59 @@
             return { axisName, layerVal };
         }
 
-        function collectVisibleBands(kind, rxDeg, ryDeg) {
-            const bands = [];
-            FACE_NAMES.forEach(face => {
-                for (let bandLine = 0; bandLine < 3; bandLine++) {
-                    const indices = bandIndices(kind, bandLine);
-                    const projected = indices
-                        .map(idx => projectStickerToScreen(slotPos(face, idx), rxDeg, ryDeg))
-                        .filter(point => point.z > 0.05);
-                    if (projected.length < 2) {
-                        continue;
-                    }
-                    const xs = projected.map(point => point.sx);
-                    const ys = projected.map(point => point.sy);
-                    const spreadX = Math.max(...xs) - Math.min(...xs);
-                    const spreadY = Math.max(...ys) - Math.min(...ys);
-                    if (kind === 'col' && spreadX > spreadY * 0.55) {
-                        continue;
-                    }
-                    if (kind === 'row' && spreadY > spreadX * 0.55) {
-                        continue;
-                    }
-                    bands.push({
-                        face,
-                        line: bandLine,
-                        avgX: xs.reduce((sum, val) => sum + val, 0) / xs.length,
-                        avgY: ys.reduce((sum, val) => sum + val, 0) / ys.length,
-                        ...bandLayerFromFace(face, kind, bandLine)
-                    });
-                }
-            });
-            return bands;
+        function isBandScreenAligned(face, kind, rxDeg, ryDeg) {
+            const indices = bandIndices(kind, 0);
+            const projected = indices.map(idx => viewTransform(slotPos(face, idx), rxDeg, ryDeg));
+            const xs = projected.map(point => point.x);
+            const ys = projected.map(point => point.y);
+            const spreadX = Math.max(...xs) - Math.min(...xs);
+            const spreadY = Math.max(...ys) - Math.min(...ys);
+            if (kind === 'col') {
+                return spreadX < spreadY * 0.55;
+            }
+            return spreadY < spreadX * 0.55;
         }
 
-        function uniqueBandsSorted(bands, kind) {
-            const sorted = bands.slice().sort((a, b) => (
-                kind === 'col' ? a.avgX - b.avgX : a.avgY - b.avgY
-            ));
-            const seen = new Set();
-            return sorted.filter(band => {
-                const key = `${band.axisName}:${band.layerVal}`;
-                if (seen.has(key)) {
-                    return false;
-                }
-                seen.add(key);
-                return true;
-            });
-        }
-
-        function columnRotationAxes(rxDeg, ryDeg) {
-            return ['x', 'y', 'z'].filter(axisName => {
-                const view = viewTransform(CUBE_AXES[axisName], rxDeg, ryDeg);
-                return Math.abs(view.x) >= Math.abs(view.y);
-            });
-        }
-
-        function rowRotationAxes(rxDeg, ryDeg) {
-            return ['x', 'y', 'z'].filter(axisName => {
-                const view = viewTransform(CUBE_AXES[axisName], rxDeg, ryDeg);
-                return Math.abs(view.y) > Math.abs(view.x);
-            });
-        }
-
-        function pickSliceByScreenLine(kind, line, rxDeg, ryDeg) {
-            const arrowCoord = SCENE_OFFSET + line * (210 / 3) + (210 / 3) / 2;
-            const axes = kind === 'col'
-                ? columnRotationAxes(rxDeg, ryDeg)
-                : rowRotationAxes(rxDeg, ryDeg);
-            let best = null;
-            let bestScore = Infinity;
-            axes.forEach(axisName => {
-                [-1, 0, 1].forEach(layerVal => {
-                    const axis = CUBE_AXES[axisName];
-                    let total = 0;
-                    let count = 0;
-                    ALL_STICKER_SLOTS.forEach(slot => {
-                        if (Math.abs(vecDot(slot.pos, axis) - layerVal) > 0.55) {
-                            return;
-                        }
-                        const screen = projectStickerToScreen(slot.pos, rxDeg, ryDeg);
-                        if (screen.z < 0.05) {
-                            return;
-                        }
-                        total += kind === 'col'
-                            ? Math.abs(screen.sx - arrowCoord)
-                            : Math.abs(screen.sy - arrowCoord);
-                        count++;
-                    });
-                    if (count < 3) {
-                        return;
-                    }
-                    const score = total / count;
-                    if (score < bestScore) {
-                        bestScore = score;
-                        best = { axisName, layerVal, face: 'front', line };
-                    }
-                });
-            });
-            return best || { axisName: 'x', layerVal: 0, face: 'front', line };
-        }
-
-        function pickSlice(kind, line) {
+        function getControlFace(kind) {
             const rxDeg = currentRotation.x;
             const ryDeg = currentRotation.y;
-            const unique = uniqueBandsSorted(collectVisibleBands(kind, rxDeg, ryDeg), kind);
-            if (unique[line]) {
-                return unique[line];
-            }
-            return pickSliceByScreenLine(kind, line, rxDeg, ryDeg);
+            let controlFace = 'front';
+            let bestZ = -Infinity;
+            FACE_NAMES.forEach(face => {
+                const viewZ = viewTransform(FACE_BASIS[face].n, rxDeg, ryDeg).z;
+                if (viewZ < 0.2 || !isBandScreenAligned(face, kind, rxDeg, ryDeg)) {
+                    return;
+                }
+                if (viewZ > bestZ) {
+                    bestZ = viewZ;
+                    controlFace = face;
+                }
+            });
+            return controlFace;
+        }
+
+        const SLICE_OBJECTS = (() => {
+            const slices = {};
+            ['x', 'y', 'z'].forEach(axisName => {
+                [-1, 0, 1].forEach(layerVal => {
+                    const id = `${axisName}:${layerVal}`;
+                    slices[id] = {
+                        id,
+                        axisName,
+                        layerVal,
+                        stickerKeys: layerStickerKeys(axisName, layerVal),
+                        permForSign(sign) {
+                            return LAYER_PERM_ATLAS[`${axisName}:${layerVal}:${sign}`];
+                        }
+                    };
+                });
+            });
+            return slices;
+        })();
+
+        function pickSlice(kind, line) {
+            const face = getControlFace(kind);
+            return { face, line, ...bandLayerFromFace(face, kind, line) };
         }
 
         function edgeStickerIndex(kind, bandLine, screenDir) {
@@ -661,10 +563,7 @@
             return bestPos;
         }
 
-        function pickTurnSign(kind, screenDir, slice) {
-            const rotAxis = CUBE_AXES[slice.axisName];
-            const testPos = stickerOnSliceFrontmost(slice.axisName, slice.layerVal)
-                || slotPos(slice.face, edgeStickerIndex(kind, slice.line, screenDir));
+        function turnSignForSticker(kind, screenDir, testPos, rotAxis) {
             const startView = viewTransform(testPos, currentRotation.x, currentRotation.y);
             const screenScore = (sign) => {
                 const endPos = rotateAroundAxis(testPos, rotAxis, sign * Math.PI / 2);
@@ -676,24 +575,58 @@
                 const dx = endView.x - startView.x;
                 return screenDir === 'right' ? dx : -dx;
             };
-
             const positive = screenScore(1);
             const negative = screenScore(-1);
             if (Math.abs(positive - negative) < 1e-6) {
-                return screenDir === 'up' || screenDir === 'right' ? 1 : -1;
+                return null;
             }
             return positive > negative ? 1 : -1;
         }
 
+        function oppositeScreenDir(screenDir) {
+            if (screenDir === 'up') return 'down';
+            if (screenDir === 'down') return 'up';
+            if (screenDir === 'right') return 'left';
+            return 'right';
+        }
+
+        function resolveTurnSign(kind, screenDir, slice) {
+            const rotAxis = CUBE_AXES[slice.axisName];
+            const edgePos = slotPos(slice.face, edgeStickerIndex(kind, slice.line, screenDir));
+            const edgeSign = turnSignForSticker(kind, screenDir, edgePos, rotAxis);
+            if (edgeSign !== null) {
+                return edgeSign;
+            }
+            const frontPos = stickerOnSliceFrontmost(slice.axisName, slice.layerVal);
+            if (frontPos) {
+                const frontSign = turnSignForSticker(kind, screenDir, frontPos, rotAxis);
+                if (frontSign !== null) {
+                    return frontSign;
+                }
+            }
+            return screenDir === 'up' || screenDir === 'right' ? 1 : -1;
+        }
+
+        function pickTurnSign(kind, screenDir, slice) {
+            const sign = resolveTurnSign(kind, screenDir, slice);
+            const oppositeSign = resolveTurnSign(kind, oppositeScreenDir(screenDir), slice);
+            if (sign === oppositeSign) {
+                return screenDir === 'up' || screenDir === 'right' ? 1 : -1;
+            }
+            return sign;
+        }
+
         function computeLayerMove(kind, line, screenDir) {
-            const slice = pickSlice(kind, line);
-            const sign = pickTurnSign(kind, screenDir, slice);
-            const perm = LAYER_PERM_ATLAS[`${slice.axisName}:${slice.layerVal}:${sign}`];
+            const band = pickSlice(kind, line);
+            const sign = pickTurnSign(kind, screenDir, band);
+            const slice = SLICE_OBJECTS[`${band.axisName}:${band.layerVal}`];
+            const perm = slice ? slice.permForSign(sign) : identityPerm();
             return { perm: perm || identityPerm() };
         }
 
         refreshStickerPositions();
         buildLayerPermAtlas();
+        // SLICE_OBJECTS references LAYER_PERM_ATLAS; defined after atlas build.
 
         function applyPermutation(perm) {
             const snapshot = {};
