@@ -295,25 +295,93 @@
             return best;
         }
 
+        function buildTurnPermutation(kind, layerKey, sign) {
+            if (kind === 'column') {
+                return buildColumnPermutation(layerKey, sign);
+            }
+            return buildRowPermutation(layerKey, sign);
+        }
+
+        function identityPermutation() {
+            const perm = {};
+            SLOT_LIST.forEach((slot) => {
+                const key = slotKey(slot.face, slot.index);
+                perm[key] = key;
+            });
+            return perm;
+        }
+
+        function columnFaceCol(layerKey) {
+            if (layerKey === '-1') {
+                return 0;
+            }
+            if (layerKey === '1') {
+                return 2;
+            }
+            return 1;
+        }
+
+        function rowFaceLine(layerKey) {
+            if (layerKey === '-1') {
+                return 2;
+            }
+            if (layerKey === '1') {
+                return 0;
+            }
+            return 1;
+        }
+
+        function buildColumnPermutation(layerKey, sign) {
+            const perm = identityPermutation();
+            const col = columnFaceCol(layerKey);
+            const backCol = 2 - col;
+
+            for (let row = 0; row < 3; row++) {
+                const ring = [
+                    { face: 'front', index: row * 3 + col },
+                    { face: 'top', index: row * 3 + col },
+                    { face: 'back', index: (2 - row) * 3 + backCol },
+                    { face: 'bottom', index: (2 - row) * 3 + col }
+                ];
+
+                for (let i = 0; i < ring.length; i++) {
+                    const dest = ring[i];
+                    const src = ring[(i - sign + ring.length) % ring.length];
+                    perm[slotKey(dest.face, dest.index)] = slotKey(src.face, src.index);
+                }
+            }
+
+            return perm;
+        }
+
+        function buildRowPermutation(layerKey, sign) {
+            const perm = identityPermutation();
+            const row = rowFaceLine(layerKey);
+
+            for (let col = 0; col < 3; col++) {
+                const ring = [
+                    { face: 'front', index: row * 3 + col },
+                    { face: 'right', index: row * 3 + col },
+                    { face: 'back', index: row * 3 + (2 - col) },
+                    { face: 'left', index: row * 3 + (2 - col) }
+                ];
+
+                for (let i = 0; i < ring.length; i++) {
+                    const dest = ring[i];
+                    const src = ring[(i - sign + ring.length) % ring.length];
+                    perm[slotKey(dest.face, dest.index)] = slotKey(src.face, src.index);
+                }
+            }
+
+            return perm;
+        }
+
         function buildLayerPermutations() {
             const perms = {};
-            ['x', 'y', 'z'].forEach((axisName) => {
+            ['column', 'row'].forEach((kind) => {
                 [-1, 0, 1].forEach((layerVal) => {
                     [1, -1].forEach((sign) => {
-                        const axis = CUBE_AXES[axisName];
-                        const layerKey = String(layerVal);
-                        const perm = {};
-                        SLOT_LIST.forEach((src) => {
-                            const key = slotKey(src.face, src.index);
-                            if (src.layers[axisName] !== layerKey) {
-                                perm[key] = key;
-                                return;
-                            }
-                            const rotated = rotateAroundAxis(src.pos, axis, sign * Math.PI / 2);
-                            const target = nearestSlot(rotated);
-                            perm[key] = slotKey(target.face, target.index);
-                        });
-                        perms[`${axisName}:${layerVal}:${sign}`] = perm;
+                        perms[`${kind}:${layerVal}:${sign}`] = buildTurnPermutation(kind, String(layerVal), sign);
                     });
                 });
             });
@@ -357,8 +425,23 @@
             });
         }
 
-        function sliceAxisName(kind) {
+        function turnRotationAxis(kind) {
+            return kind === 'column' ? 'y' : 'z';
+        }
+
+        function turnLayerAxis(kind) {
             return kind === 'column' ? 'x' : 'y';
+        }
+
+        function turnSliceFaces(kind) {
+            return kind === 'column'
+                ? ['front', 'back', 'top', 'bottom']
+                : ['front', 'left', 'right', 'back'];
+        }
+
+        function isInTurnSlice(slot, kind, layer) {
+            return turnSliceFaces(kind).includes(slot.face)
+                && slot.layers[turnLayerAxis(kind)] === String(layer);
         }
 
         function stickersInLockedSlice(kind, layer) {
@@ -387,13 +470,11 @@
         }
 
         function frontmostSlotInSlice(kind, layer) {
-            const axisName = sliceAxisName(kind);
-            const layerKey = String(layer);
             let best = null;
             let bestZ = -Infinity;
 
             SLOT_LIST.forEach((slot) => {
-                if (slot.layers[axisName] !== layerKey) {
+                if (!isInTurnSlice(slot, kind, layer)) {
                     return;
                 }
                 const view = viewTransform(slot.pos, rotation.x, rotation.y);
@@ -407,38 +488,49 @@
         }
 
         function resolveTurnSign(kind, layer, screenDir) {
-            const axisName = sliceAxisName(kind);
-            const axis = CUBE_AXES[axisName];
             const testSlot = frontmostSlotInSlice(kind, layer);
             if (!testSlot) {
                 return null;
             }
 
-            const startView = viewTransform(testSlot.pos, rotation.x, rotation.y);
-            const screenScore = (sign) => {
-                const endPos = rotateAroundAxis(testSlot.pos, axis, sign * Math.PI / 2);
-                const endView = viewTransform(endPos, rotation.x, rotation.y);
-                const dx = endView.x - startView.x;
-                const dy = endView.y - startView.y;
+            const probe = 1;
+            const perm = kind === 'column'
+                ? buildColumnPermutation(String(layer), probe)
+                : buildRowPermutation(String(layer), probe);
 
-                if (screenDir === 'up') {
-                    return dy;
-                }
-                if (screenDir === 'down') {
-                    return -dy;
-                }
-                if (screenDir === 'right') {
-                    return dx;
-                }
-                return -dx;
-            };
-
-            const positive = screenScore(1);
-            const negative = screenScore(-1);
-            if (Math.abs(positive - negative) < 1e-6) {
+            const destKey = slotKey(testSlot.face, testSlot.index);
+            const sourceKey = perm[destKey];
+            if (!sourceKey) {
                 return null;
             }
-            return positive > negative ? 1 : -1;
+
+            const [sourceFace, sourceIndex] = sourceKey.split(':');
+            const sourceSlot = SLOT_LIST.find((slot) => slot.face === sourceFace && slot.index === Number(sourceIndex));
+            if (!sourceSlot) {
+                return null;
+            }
+
+            const startView = viewTransform(testSlot.pos, rotation.x, rotation.y);
+            const endView = viewTransform(sourceSlot.pos, rotation.x, rotation.y);
+            const dx = endView.x - startView.x;
+            const dy = endView.y - startView.y;
+
+            let delta;
+            if (screenDir === 'up') {
+                delta = dy;
+            } else if (screenDir === 'down') {
+                delta = -dy;
+            } else if (screenDir === 'right') {
+                delta = dx;
+            } else {
+                delta = -dx;
+            }
+
+            if (Math.abs(delta) < 1e-6) {
+                return null;
+            }
+
+            return delta > 0 ? probe : -probe;
         }
 
         function turnLockedSlice(screenDir) {
@@ -464,8 +556,7 @@
                 return false;
             }
 
-            const axisName = sliceAxisName(kind);
-            const perm = LAYER_PERM[`${axisName}:${layer}:${-sign}`];
+            const perm = LAYER_PERM[`${kind}:${layer}:${-sign}`];
             if (!perm) {
                 return false;
             }
