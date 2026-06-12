@@ -159,14 +159,9 @@
 
         const cube = document.getElementById('cube');
         const stickers = {};
-        const cubeState = {};
         let highlightTimer = null;
         let activeHighlight = null;
         let lockedHighlight = null;
-        let sliceKeydownListener = null;
-
-        let SLOT_LIST = [];
-        let LAYER_PERM = {};
 
         function highlightKey(kind, layer) {
             return `${kind}:${layer}`;
@@ -186,10 +181,6 @@
 
         function stickerId(face, row, col) {
             return `${face}:${row}:${col}`;
-        }
-
-        function slotKey(face, index) {
-            return `${face}:${index}`;
         }
 
         function snapLayer(value) {
@@ -222,375 +213,6 @@
             };
         }
 
-        function viewTransform(vec, rxDeg, ryDeg) {
-            const rx = rxDeg * Math.PI / 180;
-            const ry = ryDeg * Math.PI / 180;
-            let x = vec[0];
-            let y = vec[1];
-            let z = vec[2];
-            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
-            z = y * Math.sin(rx) + z * Math.cos(rx);
-            y = y1;
-            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-            z = -x * Math.sin(ry) + z * Math.cos(ry);
-            return { x: x1, y, z };
-        }
-
-        function buildSlotList() {
-            const slots = [];
-            FACE_NAMES.forEach((face) => {
-                for (let row = 0; row < 3; row++) {
-                    for (let col = 0; col < 3; col++) {
-                        const index = row * 3 + col;
-                        slots.push({
-                            face,
-                            row,
-                            col,
-                            index,
-                            pos: worldPos(face, row, col)
-                        });
-                    }
-                }
-            });
-            return slots;
-        }
-
-        function columnFaceCol(layerKey) {
-            if (layerKey === '-1') {
-                return 0;
-            }
-            if (layerKey === '1') {
-                return 2;
-            }
-            return 1;
-        }
-
-        function rowFaceLine(layerKey) {
-            if (layerKey === '-1') {
-                return 2;
-            }
-            if (layerKey === '1') {
-                return 0;
-            }
-            return 1;
-        }
-
-        function columnRingEntries(layerKey) {
-            const col = columnFaceCol(layerKey);
-            const backCol = 2 - col;
-            const entries = [];
-            for (let row = 0; row < 3; row++) {
-                entries.push(
-                    { face: 'front', index: row * 3 + col },
-                    { face: 'top', index: row * 3 + col },
-                    { face: 'back', index: (2 - row) * 3 + backCol },
-                    { face: 'bottom', index: (2 - row) * 3 + col }
-                );
-            }
-            return entries;
-        }
-
-        function rowRingEntries(layerKey) {
-            const row = rowFaceLine(layerKey);
-            const entries = [];
-            for (let col = 0; col < 3; col++) {
-                entries.push(
-                    { face: 'front', index: row * 3 + col },
-                    { face: 'right', index: row * 3 + col },
-                    { face: 'back', index: row * 3 + (2 - col) },
-                    { face: 'left', index: row * 3 + (2 - col) }
-                );
-            }
-            return entries;
-        }
-
-        function ringEntries(kind, layerKey) {
-            return kind === 'column'
-                ? columnRingEntries(layerKey)
-                : rowRingEntries(layerKey);
-        }
-
-        function identityPermutation() {
-            const perm = {};
-            SLOT_LIST.forEach((slot) => {
-                const key = slotKey(slot.face, slot.index);
-                perm[key] = key;
-            });
-            return perm;
-        }
-
-        function buildColumnPermutation(layerKey, sign) {
-            const perm = identityPermutation();
-            const col = columnFaceCol(layerKey);
-            const backCol = 2 - col;
-
-            for (let row = 0; row < 3; row++) {
-                const ring = [
-                    { face: 'front', index: row * 3 + col },
-                    { face: 'top', index: row * 3 + col },
-                    { face: 'back', index: (2 - row) * 3 + backCol },
-                    { face: 'bottom', index: (2 - row) * 3 + col }
-                ];
-
-                for (let i = 0; i < ring.length; i++) {
-                    const dest = ring[i];
-                    const src = ring[(i - sign + ring.length) % ring.length];
-                    perm[slotKey(dest.face, dest.index)] = slotKey(src.face, src.index);
-                }
-            }
-
-            return perm;
-        }
-
-        function buildRowPermutation(layerKey, sign) {
-            const perm = identityPermutation();
-            const row = rowFaceLine(layerKey);
-
-            for (let col = 0; col < 3; col++) {
-                const ring = [
-                    { face: 'front', index: row * 3 + col },
-                    { face: 'right', index: row * 3 + col },
-                    { face: 'back', index: row * 3 + (2 - col) },
-                    { face: 'left', index: row * 3 + (2 - col) }
-                ];
-
-                for (let i = 0; i < ring.length; i++) {
-                    const dest = ring[i];
-                    const src = ring[(i - sign + ring.length) % ring.length];
-                    perm[slotKey(dest.face, dest.index)] = slotKey(src.face, src.index);
-                }
-            }
-
-            return perm;
-        }
-
-        function buildLayerPermutations() {
-            const perms = {};
-            ['column', 'row'].forEach((kind) => {
-                [-1, 0, 1].forEach((layerVal) => {
-                    [1, -1].forEach((sign) => {
-                        const layerKey = String(layerVal);
-                        perms[`${kind}:${layerKey}:${sign}`] = kind === 'column'
-                            ? buildColumnPermutation(layerKey, sign)
-                            : buildRowPermutation(layerKey, sign);
-                    });
-                });
-            });
-            return perms;
-        }
-
-        function initCubeState() {
-            FACE_NAMES.forEach((face) => {
-                cubeState[face] = Array.from({ length: 9 }, () => COLORS[face]);
-            });
-        }
-
-        function renderCube() {
-            FACE_NAMES.forEach((face) => {
-                for (let index = 0; index < 9; index++) {
-                    const row = Math.floor(index / 3);
-                    const col = index % 3;
-                    const stickerEl = sticker(face, row, col);
-                    if (stickerEl) {
-                        stickerEl.style.backgroundColor = cubeState[face][index];
-                    }
-                }
-            });
-        }
-
-        function applyPermutation(perm) {
-            const snapshot = {};
-            FACE_NAMES.forEach((face) => {
-                snapshot[face] = cubeState[face].slice();
-            });
-
-            FACE_NAMES.forEach((face) => {
-                for (let index = 0; index < 9; index++) {
-                    const sourceKey = perm[slotKey(face, index)];
-                    if (!sourceKey) {
-                        continue;
-                    }
-                    const [sourceFace, sourceIndex] = sourceKey.split(':');
-                    cubeState[face][index] = snapshot[sourceFace][Number(sourceIndex)];
-                }
-            });
-        }
-
-        function executeSliceTurn(kind, layerKey, sign) {
-            const perm = LAYER_PERM[`${kind}:${layerKey}:${sign}`];
-            if (!perm) {
-                return false;
-            }
-            applyPermutation(perm);
-            renderCube();
-            return true;
-        }
-
-        function slotFromKey(key) {
-            const [face, index] = key.split(':');
-            return SLOT_LIST.find((slot) => slot.face === face && slot.index === Number(index)) ?? null;
-        }
-
-        function frontmostRingSlot(kind, layerKey) {
-            let best = null;
-            let bestZ = -Infinity;
-            ringEntries(kind, layerKey).forEach((entry) => {
-                const slot = slotFromKey(slotKey(entry.face, entry.index));
-                if (!slot) {
-                    return;
-                }
-                const view = viewTransform(slot.pos, rotation.x, rotation.y);
-                if (view.z > bestZ) {
-                    bestZ = view.z;
-                    best = slot;
-                }
-            });
-            return best;
-        }
-
-        function sliceScreenVector(kind, layerKey) {
-            let fromPos;
-            let toPos;
-
-            if (kind === 'column') {
-                const col = columnFaceCol(layerKey);
-                fromPos = worldPos('front', 2, col);
-                toPos = worldPos('front', 0, col);
-            } else {
-                const row = rowFaceLine(layerKey);
-                fromPos = worldPos('front', row, 0);
-                toPos = worldPos('front', row, 2);
-            }
-
-            const fromScreen = viewTransform(fromPos, rotation.x, rotation.y);
-            const toScreen = viewTransform(toPos, rotation.x, rotation.y);
-            return {
-                x: toScreen.x - fromScreen.x,
-                y: toScreen.y - fromScreen.y
-            };
-        }
-
-        function sliceRunsVerticallyOnScreen(kind, layerKey) {
-            const vector = sliceScreenVector(kind, layerKey);
-            return Math.abs(vector.y) > Math.abs(vector.x);
-        }
-
-        function pieceMotionOnScreen(kind, layerKey, sign) {
-            const perm = LAYER_PERM[`${kind}:${layerKey}:${sign}`];
-            const slot = frontmostRingSlot(kind, layerKey);
-            if (!perm || !slot) {
-                return null;
-            }
-
-            const destKey = slotKey(slot.face, slot.index);
-            const sourceKey = perm[destKey];
-            const source = slotFromKey(sourceKey);
-            if (!source) {
-                return null;
-            }
-
-            const destView = viewTransform(slot.pos, rotation.x, rotation.y);
-            const sourceView = viewTransform(source.pos, rotation.x, rotation.y);
-            return {
-                dx: destView.x - sourceView.x,
-                dy: destView.y - sourceView.y
-            };
-        }
-
-        function signForScreenDirection(kind, layerKey, screenDir) {
-            const positive = pieceMotionOnScreen(kind, layerKey, 1);
-            const negative = pieceMotionOnScreen(kind, layerKey, -1);
-            if (!positive || !negative) {
-                return null;
-            }
-
-            const score = (motion) => {
-                if (screenDir === 'up') {
-                    return motion.dy;
-                }
-                if (screenDir === 'down') {
-                    return -motion.dy;
-                }
-                if (screenDir === 'right') {
-                    return motion.dx;
-                }
-                return -motion.dx;
-            };
-
-            const positiveScore = score(positive);
-            const negativeScore = score(negative);
-            if (Math.abs(positiveScore - negativeScore) < 1e-6) {
-                return null;
-            }
-            return positiveScore > negativeScore ? 1 : -1;
-        }
-
-        function turnLockedSlice(screenDir) {
-            if (!lockedHighlight) {
-                return false;
-            }
-
-            const { kind, layer } = lockedHighlight;
-            const vertical = sliceRunsVerticallyOnScreen(kind, layer);
-
-            if (vertical && (screenDir === 'left' || screenDir === 'right')) {
-                return false;
-            }
-            if (!vertical && (screenDir === 'up' || screenDir === 'down')) {
-                return false;
-            }
-
-            const sign = signForScreenDirection(kind, layer, screenDir);
-            if (sign === null) {
-                return false;
-            }
-
-            if (!executeSliceTurn(kind, layer, sign)) {
-                return false;
-            }
-
-            showSliceHighlight(kind, layer);
-            return true;
-        }
-
-        function onSliceKeydown(event) {
-            if (!lockedHighlight) {
-                return;
-            }
-
-            const screenDirs = {
-                ArrowUp: 'up',
-                ArrowDown: 'down',
-                ArrowLeft: 'left',
-                ArrowRight: 'right'
-            };
-
-            const screenDir = screenDirs[event.key];
-            if (!screenDir) {
-                return;
-            }
-
-            if (turnLockedSlice(screenDir)) {
-                event.preventDefault();
-            }
-        }
-
-        function enableSliceKeyboard() {
-            if (sliceKeydownListener) {
-                return;
-            }
-            sliceKeydownListener = onSliceKeydown;
-            window.addEventListener('keydown', sliceKeydownListener);
-        }
-
-        function disableSliceKeyboard() {
-            if (!sliceKeydownListener) {
-                return;
-            }
-            window.removeEventListener('keydown', sliceKeydownListener);
-            sliceKeydownListener = null;
-        }
-
         function buildCube() {
             FACE_NAMES.forEach((face) => {
                 const faceEl = document.createElement('div');
@@ -599,19 +221,19 @@
 
                 for (let row = 0; row < 3; row++) {
                     for (let col = 0; col < 3; col++) {
-                        const stickerEl = document.createElement('div');
+                        const sticker = document.createElement('div');
                         const layers = layerCoords(face, row, col);
-                        stickerEl.className = 'sticker';
-                        stickerEl.dataset.face = face;
-                        stickerEl.dataset.row = String(row);
-                        stickerEl.dataset.col = String(col);
-                        stickerEl.dataset.index = String(row * 3 + col);
-                        stickerEl.dataset.layerX = layers.x;
-                        stickerEl.dataset.layerY = layers.y;
-                        stickerEl.dataset.layerZ = layers.z;
-                        stickerEl.style.backgroundColor = COLORS[face];
-                        faceEl.appendChild(stickerEl);
-                        stickers[stickerId(face, row, col)] = stickerEl;
+                        sticker.className = 'sticker';
+                        sticker.dataset.face = face;
+                        sticker.dataset.row = String(row);
+                        sticker.dataset.col = String(col);
+                        sticker.dataset.index = String(row * 3 + col);
+                        sticker.dataset.layerX = layers.x;
+                        sticker.dataset.layerY = layers.y;
+                        sticker.dataset.layerZ = layers.z;
+                        sticker.style.backgroundColor = COLORS[face];
+                        faceEl.appendChild(sticker);
+                        stickers[stickerId(face, row, col)] = sticker;
                     }
                 }
 
@@ -701,14 +323,12 @@
             lockedHighlight = null;
             activeHighlight = null;
             removeHighlightVisuals();
-            disableSliceKeyboard();
         }
 
         function lockHighlight(kind, layer) {
             lockedHighlight = { kind, layer };
             activeHighlight = { kind, layer };
             showSliceHighlight(kind, layer);
-            enableSliceKeyboard();
         }
 
         function applySliceHighlight(kind, layer) {
@@ -722,8 +342,8 @@
                 return;
             }
 
-            matches.forEach((stickerEl) => {
-                stickerEl.classList.add('slice-highlight');
+            matches.forEach((sticker) => {
+                sticker.classList.add('slice-highlight');
             });
         }
 
@@ -793,10 +413,6 @@
         }
 
         buildCube();
-        SLOT_LIST = buildSlotList();
-        LAYER_PERM = buildLayerPermutations();
-        initCubeState();
-        renderCube();
 
         const viewport = document.getElementById('viewport');
         const DEFAULT_ROTATION = { x: 0, y: 0 };
@@ -877,9 +493,7 @@
             },
             resetRotation,
             getLockedHighlight: () => (lockedHighlight ? { ...lockedHighlight } : null),
-            unlockHighlight,
-            turnLockedSlice,
-            sliceScreenVector: (kind, layer) => sliceScreenVector(kind, layer)
+            unlockHighlight
         };
     </script>
 </body>
