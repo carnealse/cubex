@@ -160,6 +160,24 @@
         const cube = document.getElementById('cube');
         const stickers = {};
         let highlightTimer = null;
+        let activeHighlight = null;
+        let lockedHighlight = null;
+
+        function highlightKey(kind, layer) {
+            return `${kind}:${layer}`;
+        }
+
+        function sliceFromZone(zone) {
+            const kind = zone.dataset.sliceKind;
+            if (!kind) {
+                return null;
+            }
+            const layer = kind === 'column' ? zone.dataset.layerX : zone.dataset.layerY;
+            if (!layer) {
+                return null;
+            }
+            return { kind, layer };
+        }
 
         function stickerId(face, row, col) {
             return `${face}:${row}:${col}`;
@@ -266,15 +284,51 @@
             return container;
         }
 
-        function clearSliceHighlight() {
+        function removeHighlightVisuals() {
+            document.querySelectorAll('.sticker.slice-highlight').forEach((sticker) => {
+                sticker.classList.remove('slice-highlight');
+            });
+        }
+
+        function clearHoverHighlight() {
             if (highlightTimer !== null) {
                 clearTimeout(highlightTimer);
                 highlightTimer = null;
             }
 
-            document.querySelectorAll('.sticker.slice-highlight').forEach((sticker) => {
-                sticker.classList.remove('slice-highlight');
-            });
+            if (lockedHighlight) {
+                return;
+            }
+
+            activeHighlight = null;
+            removeHighlightVisuals();
+        }
+
+        function showSliceHighlight(kind, layer) {
+            if (!layer) {
+                return;
+            }
+
+            removeHighlightVisuals();
+            applySliceHighlight(kind, layer);
+            activeHighlight = { kind, layer };
+        }
+
+        function unlockHighlight() {
+            if (highlightTimer !== null) {
+                clearTimeout(highlightTimer);
+                highlightTimer = null;
+            }
+
+            lockedHighlight = null;
+            activeHighlight = null;
+            removeHighlightVisuals();
+        }
+
+        function lockHighlight(kind, layer) {
+            lockedHighlight = { kind, layer };
+            activeHighlight = { kind, layer };
+            showSliceHighlight(kind, layer);
         }
 
         function applySliceHighlight(kind, layer) {
@@ -295,9 +349,12 @@
 
         function wireEdgeZone(zone) {
             zone.addEventListener('mouseenter', () => {
-                const kind = zone.dataset.sliceKind;
-                const layer = kind === 'column' ? zone.dataset.layerX : zone.dataset.layerY;
-                if (!kind || !layer) {
+                if (lockedHighlight) {
+                    return;
+                }
+
+                const slice = sliceFromZone(zone);
+                if (!slice) {
                     return;
                 }
 
@@ -305,15 +362,36 @@
                     clearTimeout(highlightTimer);
                 }
 
+                const { kind, layer } = slice;
                 highlightTimer = setTimeout(() => {
                     highlightTimer = null;
-                    clearSliceHighlight();
-                    applySliceHighlight(kind, layer);
+                    if (lockedHighlight) {
+                        return;
+                    }
+                    showSliceHighlight(kind, layer);
                 }, HIGHLIGHT_DELAY_MS);
             });
 
             zone.addEventListener('mouseleave', () => {
-                clearSliceHighlight();
+                clearHoverHighlight();
+            });
+
+            zone.addEventListener('click', (event) => {
+                if (event.button !== 0 || lockedHighlight) {
+                    return;
+                }
+
+                const slice = sliceFromZone(zone);
+                if (!slice || !activeHighlight) {
+                    return;
+                }
+
+                if (highlightKey(slice.kind, slice.layer) !== highlightKey(activeHighlight.kind, activeHighlight.layer)) {
+                    return;
+                }
+
+                event.stopPropagation();
+                lockHighlight(slice.kind, slice.layer);
             });
         }
 
@@ -361,7 +439,7 @@
             activePointerId = event.pointerId;
             lastPointer = { x: event.clientX, y: event.clientY };
             viewport.classList.add('is-dragging');
-            clearSliceHighlight();
+            clearHoverHighlight();
             viewport.setPointerCapture(event.pointerId);
         });
 
@@ -396,6 +474,11 @@
         viewport.addEventListener('pointerup', endDrag);
         viewport.addEventListener('pointercancel', endDrag);
 
+        viewport.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            unlockHighlight();
+        });
+
         applyRotation();
 
         window.cubeApi = {
@@ -409,7 +492,8 @@
                 applyRotation();
             },
             resetRotation,
-            clearSliceHighlight
+            getLockedHighlight: () => (lockedHighlight ? { ...lockedHighlight } : null),
+            unlockHighlight
         };
     </script>
 </body>
