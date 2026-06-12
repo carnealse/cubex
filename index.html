@@ -339,7 +339,7 @@
             for (let row = 0; row < 3; row++) {
                 entries.push(
                     { face: 'front', index: row * 3 + col },
-                    { face: 'top', index: row * 3 + col },
+                    { face: 'top', index: (2 - row) * 3 + col },
                     { face: 'back', index: (2 - row) * 3 + backCol },
                     { face: 'bottom', index: (2 - row) * 3 + col }
                 );
@@ -384,7 +384,7 @@
             for (let row = 0; row < 3; row++) {
                 const ring = [
                     { face: 'front', index: row * 3 + col },
-                    { face: 'top', index: row * 3 + col },
+                    { face: 'top', index: (2 - row) * 3 + col },
                     { face: 'back', index: (2 - row) * 3 + backCol },
                     { face: 'bottom', index: (2 - row) * 3 + col }
                 ];
