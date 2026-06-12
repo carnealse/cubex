@@ -376,27 +376,108 @@
             return { x, y: y1, z };
         }
 
-        function getDominantFace() {
-            let dominant = 'front';
-            let bestZ = -Infinity;
-            for (const face of FACE_NAMES) {
-                const rotated = transformVector(FACE_NORMALS[face], currentRotation.x, currentRotation.y);
-                if (rotated.z > bestZ) {
-                    bestZ = rotated.z;
-                    dominant = face;
-                }
-            }
-            return dominant;
+        const CUBE_AXES = {
+            x: [1, 0, 0],
+            y: [0, 1, 0],
+            z: [0, 0, 1]
+        };
+
+        function inverseTransformVector(vec, rxDeg, ryDeg) {
+            const rx = -rxDeg * Math.PI / 180;
+            const ry = -ryDeg * Math.PI / 180;
+            let x = vec.x;
+            let y = vec.y;
+            let z = vec.z;
+            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
+            z = y * Math.sin(rx) + z * Math.cos(rx);
+            y = y1;
+            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
+            z = -x * Math.sin(ry) + z * Math.cos(ry);
+            return [x1, y, z];
         }
 
-        function resolveAngleSign(kind, line, screenDir, dominant) {
-            const basis = FACE_BASIS[dominant];
-            const rotAxis = kind === 'col' ? basis.r : basis.u;
-            const layerVal = kind === 'col' ? line - 1 : 1 - line;
+        function nearestCubeAxis(vec) {
+            let bestName = 'x';
+            let bestAbs = -1;
+            let bestSign = 1;
+            for (const [name, axis] of Object.entries(CUBE_AXES)) {
+                const dot = vecDot(vec, axis);
+                const abs = Math.abs(dot);
+                if (abs > bestAbs) {
+                    bestAbs = abs;
+                    bestName = name;
+                    bestSign = dot >= 0 ? 1 : -1;
+                }
+            }
+            return {
+                name: bestName,
+                axis: vecScale(CUBE_AXES[bestName], bestSign),
+                layerAxis: CUBE_AXES[bestName]
+            };
+        }
+
+        function pickCubeLayer(kind, line) {
+            const screenRight = inverseTransformVector({ x: 1, y: 0, z: 0 }, currentRotation.x, currentRotation.y);
+            const screenUp = inverseTransformVector({ x: 0, y: -1, z: 0 }, currentRotation.x, currentRotation.y);
+            const orient = nearestCubeAxis(kind === 'col' ? screenRight : screenUp);
+            const targetLine = line - 1;
+            let bestVal = 0;
+            let bestScore = Infinity;
+
+            for (const val of [-1, 0, 1]) {
+                let sum = 0;
+                let count = 0;
+                FACE_NAMES.forEach(face => {
+                    for (let idx = 0; idx < 9; idx++) {
+                        const pos = slotPos(face, idx);
+                        if (Math.abs(vecDot(pos, orient.layerAxis) - val) > 0.55) {
+                            return;
+                        }
+                        const view = transformVector(pos, currentRotation.x, currentRotation.y);
+                        sum += kind === 'col' ? view.x : view.y;
+                        count++;
+                    }
+                });
+                const score = Math.abs((sum / Math.max(count, 1)) - targetLine);
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestVal = val;
+                }
+            }
+
+            return {
+                axisName: orient.name,
+                layerAxis: orient.layerAxis,
+                layerVal: bestVal,
+                rotAxis: orient.axis
+            };
+        }
+
+        function resolveAngleSign(kind, line, screenDir, layerInfo) {
+            const { rotAxis, layerAxis, layerVal } = layerInfo;
             const screenX = kind === 'col' ? 0 : (screenDir === 'right' ? 1 : -1);
             const screenY = kind === 'col' ? (screenDir === 'up' ? -1 : 1) : 0;
-            const testIdx = kind === 'col' ? layerVal + 1 + 3 : (1 - layerVal) * 3 + 1;
-            const testPos = slotPos(dominant, testIdx);
+            let testPos = null;
+            let bestZ = -Infinity;
+
+            FACE_NAMES.forEach(face => {
+                for (let idx = 0; idx < 9; idx++) {
+                    const pos = slotPos(face, idx);
+                    if (Math.abs(vecDot(pos, layerAxis) - layerVal) > 0.55) {
+                        return;
+                    }
+                    const view = transformVector(pos, currentRotation.x, currentRotation.y);
+                    if (view.z > bestZ) {
+                        bestZ = view.z;
+                        testPos = pos;
+                    }
+                }
+            });
+
+            if (!testPos) {
+                return 1;
+            }
+
             const startView = transformVector(testPos, currentRotation.x, currentRotation.y);
             const score = (sign) => {
                 const endPos = rotateAroundAxis(testPos, rotAxis, sign * Math.PI / 2);
@@ -406,34 +487,66 @@
             return score(1) >= score(-1) ? 1 : -1;
         }
 
-        function computeLayerMove(kind, line, screenDir, dominant) {
-            const basis = FACE_BASIS[dominant];
-            const rotAxis = kind === 'col' ? basis.r : basis.u;
-            const layerAxis = kind === 'col' ? basis.r : basis.u;
-            const layerVal = kind === 'col' ? line - 1 : 1 - line;
-            const angleSign = resolveAngleSign(kind, line, screenDir, dominant);
+        function buildXLayerPerm(layerVal, clockwise) {
+            const col = layerVal + 1;
+            const flow = {
+                [`front:${col}`]: `top:${col}`,
+                [`top:${col}`]: `back:${col}`,
+                [`back:${col}`]: `bottom:${col}`,
+                [`bottom:${col}`]: `front:${col + 6}`,
+                [`front:${col + 6}`]: `bottom:${col + 6}`,
+                [`bottom:${col + 6}`]: `back:${col + 6}`,
+                [`back:${col + 6}`]: `top:${col + 6}`,
+                [`top:${col + 6}`]: `front:${col}`,
+                [`front:${col + 3}`]: `top:${col + 3}`,
+                [`top:${col + 3}`]: `back:${col + 3}`,
+                [`back:${col + 3}`]: `bottom:${col + 3}`,
+                [`bottom:${col + 3}`]: `front:${col + 3}`
+            };
+            const mapping = clockwise ? flow : Object.fromEntries(
+                Object.entries(flow).map(([src, dest]) => [dest, src])
+            );
+            const perm = {};
+            FACE_NAMES.forEach(face => {
+                for (let idx = 0; idx < 9; idx++) {
+                    perm[slotKey(face, idx)] = slotKey(face, idx);
+                }
+            });
+            Object.entries(mapping).forEach(([src, dest]) => {
+                perm[dest] = src;
+            });
+            return perm;
+        }
+
+        function build3DRotationPerm(layerAxis, layerVal, rotAxis, angleSign) {
             const angle = angleSign * Math.PI / 2;
             const allSlots = [];
-
             FACE_NAMES.forEach(face => {
                 for (let idx = 0; idx < 9; idx++) {
                     allSlots.push({ face, idx, key: slotKey(face, idx), pos: slotPos(face, idx) });
                 }
             });
-
             const layerSlots = allSlots.filter(slot => Math.abs(vecDot(slot.pos, layerAxis) - layerVal) < 0.55);
             const perm = {};
             allSlots.forEach(slot => {
                 perm[slot.key] = slot.key;
             });
-
             layerSlots.forEach(slot => {
                 const target = findSlotAt(rotateAroundAxis(slot.pos, rotAxis, angle));
                 if (target) {
                     perm[slotKey(target.face, target.idx)] = slot.key;
                 }
             });
+            return perm;
+        }
 
+        function computeLayerMove(kind, line, screenDir) {
+            const layerInfo = pickCubeLayer(kind, line);
+            const angleSign = resolveAngleSign(kind, line, screenDir, layerInfo);
+            const clockwise = angleSign > 0;
+            const perm = layerInfo.axisName === 'x'
+                ? buildXLayerPerm(layerInfo.layerVal, clockwise)
+                : build3DRotationPerm(layerInfo.layerAxis, layerInfo.layerVal, layerInfo.rotAxis, angleSign);
             return { perm };
         }
 
@@ -476,8 +589,7 @@
             suppressClickAfterDrag = false;
             clearSelection();
 
-            const dominantFace = getDominantFace();
-            const move = computeLayerMove(kind, line, screenDir, dominantFace);
+            const move = computeLayerMove(kind, line, screenDir);
             applyPermutation(move.perm);
             renderCube();
             isLayerRotating = false;
