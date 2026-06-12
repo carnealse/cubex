@@ -293,23 +293,12 @@
         }
 
         function validateSlice(slice) {
-            if (!slice) {
-                return false;
-            }
-            if (slice.type !== 'column' && slice.type !== 'row') {
-                return false;
-            }
-            if (![0, 1, 2].includes(slice.index)) {
-                return false;
-            }
-            if (slice.type === 'column' && slice.axis !== 'X') {
-                return false;
-            }
-            if (slice.type === 'row' && slice.axis !== 'Y') {
-                return false;
-            }
-            const layerKey = indexToLayerKey(slice.index);
-            return ringEntries(slice.type, layerKey).length === 12;
+            if (!slice) return false;
+            if (slice.type !== 'column' && slice.type !== 'row') return false;
+            if (![0, 1, 2].includes(slice.index)) return false;
+            if (slice.type === 'column' && slice.axis !== 'X') return false;
+            if (slice.type === 'row' && slice.axis !== 'Y') return false;
+            return true;
         }
 
         function columnFaceCol(layerKey) {
