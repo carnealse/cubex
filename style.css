@@ -1,0 +1,54 @@
+body {
+  padding: 0px;
+  margin: 0px;
+  overflow-y: hidden;
+}
+
+.sticker {
+  box-sizing: border-box;
+  border: 2px black solid;
+  position: absolute;
+  transition: transform 0s;
+}
+
+#theFace {
+  transform-style: preserve-3d;
+}
+
+#time {
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+#settingsDiv {
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+  background-color: white;
+  border: black 2px solid;
+  border-radius: 5px;
+  display: none;
+  z-index: 10;
+}
+
+Cube {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: rotateX(45deg)rotateY(45deg)rotateZ(45deg);
+  transition: transform .1s;
+  background-color: black;
+  text-align: center;
+  display: block;
+  transform-style: preserve-3d;
+}
+
+cubie {
+  display: block;
+  -webkit-transform-style: preserve-3d;
+  -moz-transform-style: preserve-3d;
+  -o-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}

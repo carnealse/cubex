@@ -1,212 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cube</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #111;
-            user-select: none;
-            touch-action: none;
-        }
-
-        .viewport {
-            width: 360px;
-            height: 360px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            perspective: 700px;
-            perspective-origin: 50% 50%;
-            cursor: grab;
-        }
-
-        .viewport.is-dragging {
-            cursor: grabbing;
-        }
-
-        .cube {
-            width: 210px;
-            height: 210px;
-            position: relative;
-            transform-style: preserve-3d;
-            transform: rotateX(0deg) rotateY(0deg);
-        }
-
-        .face {
-            position: absolute;
-            width: 210px;
-            height: 210px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 4px;
-            padding: 4px;
-            background: #000;
-            border-radius: 6px;
-            backface-visibility: hidden;
-        }
-
-        .sticker {
-            border-radius: 4px;
-            border: 1px solid rgba(0, 0, 0, 0.35);
-        }
-
-        .face[data-face="front"]  { transform: rotateY(0deg) translateZ(105px); }
-        .face[data-face="back"]   { transform: rotateY(180deg) translateZ(105px); }
-        .face[data-face="right"]  { transform: rotateY(90deg) translateZ(105px); }
-        .face[data-face="left"]   { transform: rotateY(-90deg) translateZ(105px); }
-        .face[data-face="top"]    { transform: rotateX(90deg) translateZ(105px); }
-        .face[data-face="bottom"] { transform: rotateX(-90deg) translateZ(105px); }
-    </style>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta charset="utf-8">
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=0">
+	<title>Cube</title>
+	<link rel="stylesheet" type="text/css" href="style.css" />
+	<script src="cube.js"></script>
+	<script src="piece.js"></script>
+	<script src="face.js"></script>
+	<script src="controller.js"></script>
 </head>
+
 <body>
-    <div class="viewport" id="viewport">
-        <div class="cube" id="cube"></div>
-    </div>
+	<h1 id="time"></h1>
+	<button onclick="openSettings()">Settings</button>
+	<div id="settingsDiv">
+		Size: <input type="number" id="size" /> <br>
+		Turn Speed: <input type="number" id="turnSpeed" step=".1" /> <br>
+		Animate: <input type="checkbox" id="animate" /> <br>
+		Cube Size: <input type="text" id="cubeSize" /> <br>
+		Opaque: <input type="checkbox" id="opaque" /> <br>
+		Inspection: <input type="checkbox" id="inspection" /> <br>
+		Inspection Time: <input type="number" id="inspectionTime" /> <br>
+		<button onclick="updateSettings()"> Apply </button> <br>
+		<button onclick="document.getElementById('settingsDiv').style.display = 'none'"> Cancel </button>
+	</div>
+	<Cube id="cube"></Cube>
+	<script>
+		const c = new Cube();
+		c.generate();
+		const timer = new Controller(c);
 
-    <script>
-        const FACE_NAMES = ['front', 'back', 'right', 'left', 'top', 'bottom'];
+		function openSettings() {
+			document.getElementById("settingsDiv").style.display = "block";
+			document.getElementById("size").value = c.settings.dim[0];
+			document.getElementById("turnSpeed").value = c.settings.turnSpeed;
+			document.getElementById("animate").checked = c.settings.animate;
+			document.getElementById("cubeSize").value = c.settings.cubeSize;
+			document.getElementById("opaque").checked = c.settings.opaque;
+			document.getElementById("inspection").checked = timer.settings.inspectionTime > -1
+			document.getElementById("inspectionTime").value = timer.settings.inspectionTime;
+		}
 
-        const COLORS = {
-            front:  '#009b48',
-            back:   '#0046ad',
-            right:  '#b71234',
-            left:   '#ff5800',
-            top:    '#ffffff',
-            bottom: '#ffd500'
-        };
-
-        const cube = document.getElementById('cube');
-        const stickers = {};
-
-        function stickerId(face, row, col) {
-            return `${face}:${row}:${col}`;
-        }
-
-        function buildCube() {
-            FACE_NAMES.forEach((face) => {
-                const faceEl = document.createElement('div');
-                faceEl.className = 'face';
-                faceEl.dataset.face = face;
-
-                for (let row = 0; row < 3; row++) {
-                    for (let col = 0; col < 3; col++) {
-                        const sticker = document.createElement('div');
-                        sticker.className = 'sticker';
-                        sticker.dataset.face = face;
-                        sticker.dataset.row = String(row);
-                        sticker.dataset.col = String(col);
-                        sticker.dataset.index = String(row * 3 + col);
-                        sticker.style.backgroundColor = COLORS[face];
-                        faceEl.appendChild(sticker);
-                        stickers[stickerId(face, row, col)] = sticker;
-                    }
-                }
-
-                cube.appendChild(faceEl);
-            });
-        }
-
-        function sticker(face, row, col) {
-            return stickers[stickerId(face, row, col)] ?? null;
-        }
-
-        function bandStickers(face, kind, line) {
-            const results = [];
-            for (let i = 0; i < 3; i++) {
-                const row = kind === 'row' ? line : i;
-                const col = kind === 'col' ? line : i;
-                const stickerEl = sticker(face, row, col);
-                if (stickerEl) {
-                    results.push(stickerEl);
-                }
-            }
-            return results;
-        }
-
-        buildCube();
-
-        const viewport = document.getElementById('viewport');
-        const DEFAULT_ROTATION = { x: 0, y: 0 };
-        let rotation = { ...DEFAULT_ROTATION };
-        let isDragging = false;
-        let activePointerId = null;
-        let lastPointer = { x: 0, y: 0 };
-
-        function applyRotation() {
-            cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
-        }
-
-        function resetRotation() {
-            rotation = { ...DEFAULT_ROTATION };
-            applyRotation();
-        }
-
-        viewport.addEventListener('pointerdown', (event) => {
-            isDragging = true;
-            activePointerId = event.pointerId;
-            lastPointer = { x: event.clientX, y: event.clientY };
-            viewport.classList.add('is-dragging');
-            viewport.setPointerCapture(event.pointerId);
-        });
-
-        viewport.addEventListener('pointermove', (event) => {
-            if (!isDragging || event.pointerId !== activePointerId) {
-                return;
-            }
-
-            const dx = event.clientX - lastPointer.x;
-            const dy = event.clientY - lastPointer.y;
-            lastPointer = { x: event.clientX, y: event.clientY };
-
-            rotation.y += dx * 0.5;
-            rotation.x -= dy * 0.5;
-            applyRotation();
-        });
-
-        function endDrag(event) {
-            if (!isDragging || (event.pointerId !== activePointerId && event.type !== 'pointercancel')) {
-                return;
-            }
-
-            isDragging = false;
-            activePointerId = null;
-            viewport.classList.remove('is-dragging');
-
-            if (viewport.hasPointerCapture(event.pointerId)) {
-                viewport.releasePointerCapture(event.pointerId);
-            }
-        }
-
-        viewport.addEventListener('pointerup', endDrag);
-        viewport.addEventListener('pointercancel', endDrag);
-
-        applyRotation();
-
-        window.cubeApi = {
-            faces: FACE_NAMES,
-            colors: COLORS,
-            sticker,
-            bandStickers,
-            getRotation: () => ({ ...rotation }),
-            setRotation: (x, y) => {
-                rotation = { x, y };
-                applyRotation();
-            },
-            resetRotation
-        };
-    </script>
+		function updateSettings() {
+			document.getElementById("settingsDiv").style.display = "none";
+			const size = Number(document.getElementById("size").value);
+			c.settings.dim = [size, size, size];
+			c.settings.turnSpeed = Number(document.getElementById("turnSpeed").value);
+			c.settings.animate = Boolean(document.getElementById("animate").checked);
+			c.settings.cubeSize = Number(document.getElementById("cubeSize").value);
+			c.settings.opaque = document.getElementById("opaque").checked;
+			timer.settings.inspectionTime = document.getElementById("inspection").checked ? document.getElementById(
+				"inspectionTime").value : -1;
+			c.generate()
+		}
+	</script>
 </body>
+
 </html>
