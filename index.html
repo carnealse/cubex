@@ -178,16 +178,48 @@
             return `${kind}:${layer}`;
         }
 
+        function sliceFromFacelet(face, row, col, kind) {
+            if (!face || !kind) {
+                return null;
+            }
+            const layers = layerCoords(face, row, col);
+            const layer = kind === 'column' ? layers.x : layers.y;
+            if (!layer) {
+                return null;
+            }
+            return { kind, layer, face, row, col };
+        }
+
         function sliceFromZone(zone) {
             const kind = zone.dataset.sliceKind;
             if (!kind) {
                 return null;
+            }
+            if (zone.dataset.face && zone.dataset.row !== undefined && zone.dataset.col !== undefined) {
+                return sliceFromFacelet(
+                    zone.dataset.face,
+                    Number(zone.dataset.row),
+                    Number(zone.dataset.col),
+                    kind
+                );
             }
             const layer = kind === 'column' ? zone.dataset.layerX : zone.dataset.layerY;
             if (!layer) {
                 return null;
             }
             return { kind, layer };
+        }
+
+        function isFaceVisible(face) {
+            const view = viewTransform(FACE_BASIS[face].n, rotation.x, rotation.y);
+            return view.z > 0.05;
+        }
+
+        function updateEdgeZonePointerEvents() {
+            document.querySelectorAll('.edge-hover-zone').forEach((zone) => {
+                const face = zone.dataset.face;
+                zone.style.pointerEvents = face && isFaceVisible(face) ? 'auto' : 'none';
+            });
         }
 
         function stickerId(face, row, col) {
@@ -557,6 +589,9 @@
                 const anchor = layerCoords(face, 0, col);
                 zone.className = 'edge-hover-zone edge-hover-zone--column';
                 zone.dataset.sliceKind = 'column';
+                zone.dataset.face = face;
+                zone.dataset.row = '0';
+                zone.dataset.col = String(col);
                 zone.dataset.layerX = anchor.x;
                 zone.title = 'Column slice';
                 wireEdgeZone(zone);
@@ -576,6 +611,9 @@
                 const anchor = layerCoords(face, row, col);
                 zone.className = 'edge-hover-zone edge-hover-zone--row';
                 zone.dataset.sliceKind = 'row';
+                zone.dataset.face = face;
+                zone.dataset.row = String(row);
+                zone.dataset.col = String(col);
                 zone.dataset.layerY = anchor.y;
                 zone.title = 'Row slice';
                 wireEdgeZone(zone);
@@ -639,20 +677,33 @@
                 return;
             }
 
-            const attr = kind === 'column' ? 'data-layer-x' : 'data-layer-y';
-            const matches = document.querySelectorAll(`.sticker[${attr}="${layer}"]`);
-            if (!matches.length) {
-                return;
-            }
-
-            matches.forEach((sticker) => {
-                sticker.classList.add('slice-highlight');
+            const axisName = sliceAxisName(kind);
+            const layerKey = String(layer);
+            SLOT_LIST.forEach((slot) => {
+                if (slot.layers[axisName] !== layerKey) {
+                    return;
+                }
+                const stickerEl = sticker(slot.face, slot.row, slot.col);
+                if (stickerEl) {
+                    stickerEl.classList.add('slice-highlight');
+                }
             });
         }
 
         function wireEdgeZone(zone) {
-            zone.addEventListener('mouseenter', () => {
+            zone.addEventListener('mouseenter', (event) => {
                 if (lockedHighlight) {
+                    return;
+                }
+
+                const face = zone.dataset.face;
+                if (!face || !isFaceVisible(face)) {
+                    return;
+                }
+
+                const topEl = document.elementFromPoint(event.clientX, event.clientY);
+                const topZone = topEl?.closest('.edge-hover-zone');
+                if (topZone !== zone) {
                     return;
                 }
 
@@ -730,6 +781,7 @@
 
         function applyRotation() {
             cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
+            updateEdgeZonePointerEvents();
         }
 
         function resetRotation() {
