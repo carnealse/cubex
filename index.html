@@ -172,22 +172,120 @@
         };
 
         let SLOT_LIST = [];
-        let LAYER_PERM = {};
+        let RING_PERM = {};
+        let COLUMN_CYCLES = [];
+        let ROW_CYCLES = [];
+        let SLICE_RINGS = { column: [], row: [] };
 
-        function highlightKey(kind, layer) {
-            return `${kind}:${layer}`;
+        function buildColumnCycles(index) {
+            const col = index;
+            const backCol = 2 - col;
+            const cycles = [];
+            for (let row = 0; row < 3; row++) {
+                cycles.push([
+                    { face: 'front', row, col },
+                    { face: 'top', row: 2 - row, col },
+                    { face: 'back', row: 2 - row, col: backCol },
+                    { face: 'bottom', row: 2 - row, col }
+                ]);
+            }
+            return cycles;
+        }
+
+        function buildRowCycles(index) {
+            const row = index;
+            const cycles = [];
+            for (let col = 0; col < 3; col++) {
+                cycles.push([
+                    { face: 'front', row, col },
+                    { face: 'right', row, col },
+                    { face: 'back', row, col: 2 - col },
+                    { face: 'left', row, col: 2 - col }
+                ]);
+            }
+            return cycles;
+        }
+
+        function flattenCycles(cycles) {
+            return cycles.flat();
+        }
+
+        function buildSliceRings() {
+            COLUMN_CYCLES = [0, 1, 2].map((index) => buildColumnCycles(index));
+            ROW_CYCLES = [0, 1, 2].map((index) => buildRowCycles(index));
+            SLICE_RINGS = {
+                column: COLUMN_CYCLES.map((cycles) => flattenCycles(cycles)),
+                row: ROW_CYCLES.map((cycles) => flattenCycles(cycles))
+            };
+        }
+
+        function identityPermutation() {
+            const perm = {};
+            SLOT_LIST.forEach((slot) => {
+                perm[slotKey(slot.face, slot.index)] = slotKey(slot.face, slot.index);
+            });
+            return perm;
+        }
+
+        function buildRingPermutation(cycles, sign) {
+            const perm = identityPermutation();
+            cycles.forEach((cycle) => {
+                for (let i = 0; i < cycle.length; i++) {
+                    const dest = cycle[i];
+                    const src = cycle[(i - sign + cycle.length) % cycle.length];
+                    perm[slotKey(dest.face, dest.row * 3 + dest.col)] = slotKey(src.face, src.row * 3 + src.col);
+                }
+            });
+            return perm;
+        }
+
+        function buildRingPermutations() {
+            const perms = {};
+            COLUMN_CYCLES.forEach((cycles, index) => {
+                [1, -1].forEach((sign) => {
+                    perms[`column:${index}:${sign}`] = buildRingPermutation(cycles, sign);
+                });
+            });
+            ROW_CYCLES.forEach((cycles, index) => {
+                [1, -1].forEach((sign) => {
+                    perms[`row:${index}:${sign}`] = buildRingPermutation(cycles, sign);
+                });
+            });
+            return perms;
+        }
+
+        function isPerimeterTrigger(face, row, col, kind) {
+            if (kind === 'column') {
+                return SIDE_FACES.includes(face) && row === 0;
+            }
+            if (kind === 'row') {
+                return SIDE_FACES.includes(face) && (col === 0 || col === 2);
+            }
+            return false;
+        }
+
+        function ringContainsSticker(ring, face, row, col) {
+            return ring.some((entry) => entry.face === face && entry.row === row && entry.col === col);
+        }
+
+        function highlightKey(kind, index) {
+            return `${kind}:${index}`;
         }
 
         function sliceFromFacelet(face, row, col, kind) {
-            if (!face || !kind) {
+            if (!face || kind !== 'column' && kind !== 'row') {
                 return null;
             }
-            const layers = layerCoords(face, row, col);
-            const layer = kind === 'column' ? layers.x : layers.y;
-            if (!layer) {
+            if (!isPerimeterTrigger(face, row, col, kind)) {
                 return null;
             }
-            return { kind, layer, face, row, col };
+            const rings = SLICE_RINGS[kind];
+            for (let index = 0; index < rings.length; index++) {
+                if (ringContainsSticker(rings[index], face, row, col)) {
+                    return { kind, index };
+                }
+            }
+            return null;
         }
 
         function sliceFromZone(zone) {
@@ -203,11 +301,7 @@
                     kind
                 );
             }
-            const layer = kind === 'column' ? zone.dataset.layerX : zone.dataset.layerY;
-            if (!layer) {
-                return null;
-            }
-            return { kind, layer };
+            return null;
         }
 
         function isFaceVisible(face) {
@@ -311,47 +405,6 @@
             return slots;
         }
 
-        function nearestSlot(pos) {
-            let best = null;
-            let bestDist = Infinity;
-            SLOT_LIST.forEach((slot) => {
-                const dx = slot.pos[0] - pos[0];
-                const dy = slot.pos[1] - pos[1];
-                const dz = slot.pos[2] - pos[2];
-                const dist = dx * dx + dy * dy + dz * dz;
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    best = slot;
-                }
-            });
-            return best;
-        }
-
-        function buildLayerPermutations() {
-            const perms = {};
-            ['x', 'y', 'z'].forEach((axisName) => {
-                [-1, 0, 1].forEach((layerVal) => {
-                    [1, -1].forEach((sign) => {
-                        const axis = CUBE_AXES[axisName];
-                        const layerKey = String(layerVal);
-                        const perm = {};
-                        SLOT_LIST.forEach((src) => {
-                            const key = slotKey(src.face, src.index);
-                            if (src.layers[axisName] !== layerKey) {
-                                perm[key] = key;
-                                return;
-                            }
-                            const rotated = rotateAroundAxis(src.pos, axis, sign * Math.PI / 2);
-                            const target = nearestSlot(rotated);
-                            perm[key] = slotKey(target.face, target.index);
-                        });
-                        perms[`${axisName}:${layerVal}:${sign}`] = perm;
-                    });
-                });
-            });
-            return perms;
-        }
-
         function initCubeState() {
             FACE_NAMES.forEach((face) => {
                 cubeState[face] = Array.from({ length: 9 }, () => COLORS[face]);
@@ -393,21 +446,17 @@
             return kind === 'column' ? 'x' : 'y';
         }
 
-        function stickersInLockedSlice(kind, layer) {
-            const attr = kind === 'column' ? 'data-layer-x' : 'data-layer-y';
-            return [...document.querySelectorAll(`.sticker[${attr}="${layer}"]`)];
+        function ringStickers(kind, index) {
+            return SLICE_RINGS[kind]?.[index] ?? [];
         }
 
-        function sliceScreenOrientation(kind, layer) {
-            const stickerEls = stickersInLockedSlice(kind, layer);
-            if (!stickerEls.length) {
+        function sliceScreenOrientation(kind, index) {
+            const ring = ringStickers(kind, index);
+            if (ring.length !== 12) {
                 return null;
             }
 
-            const views = stickerEls.map((stickerEl) => {
-                const face = stickerEl.dataset.face;
-                const row = Number(stickerEl.dataset.row);
-                const col = Number(stickerEl.dataset.col);
+            const views = ring.map(({ face, row, col }) => {
                 return viewTransform(worldPos(face, row, col), rotation.x, rotation.y);
             });
 
@@ -418,37 +467,34 @@
             return spreadX > spreadY * 0.55 ? 'horizontal' : 'vertical';
         }
 
-        function frontmostSlotInSlice(kind, layer) {
-            const axisName = sliceAxisName(kind);
-            const layerKey = String(layer);
+        function frontmostStickerInRing(kind, index) {
+            const ring = ringStickers(kind, index);
             let best = null;
             let bestZ = -Infinity;
 
-            SLOT_LIST.forEach((slot) => {
-                if (slot.layers[axisName] !== layerKey) {
-                    return;
-                }
-                const view = viewTransform(slot.pos, rotation.x, rotation.y);
+            ring.forEach(({ face, row, col }) => {
+                const view = viewTransform(worldPos(face, row, col), rotation.x, rotation.y);
                 if (view.z > bestZ) {
                     bestZ = view.z;
-                    best = slot;
+                    best = { face, row, col };
                 }
             });
 
             return best;
         }
 
-        function resolveTurnSign(kind, layer, screenDir) {
+        function resolveTurnSign(kind, index, screenDir) {
             const axisName = sliceAxisName(kind);
             const axis = CUBE_AXES[axisName];
-            const testSlot = frontmostSlotInSlice(kind, layer);
-            if (!testSlot) {
+            const testSticker = frontmostStickerInRing(kind, index);
+            if (!testSticker) {
                 return null;
             }
 
-            const startView = viewTransform(testSlot.pos, rotation.x, rotation.y);
+            const testPos = worldPos(testSticker.face, testSticker.row, testSticker.col);
+            const startView = viewTransform(testPos, rotation.x, rotation.y);
             const screenScore = (sign) => {
-                const endPos = rotateAroundAxis(testSlot.pos, axis, sign * Math.PI / 2);
+                const endPos = rotateAroundAxis(testPos, axis, sign * Math.PI / 2);
                 const endView = viewTransform(endPos, rotation.x, rotation.y);
                 const dx = endView.x - startView.x;
                 const dy = endView.y - startView.y;
@@ -478,8 +524,8 @@
                 return false;
             }
 
-            const { kind, layer } = lockedHighlight;
-            const orientation = sliceScreenOrientation(kind, layer);
+            const { kind, index } = lockedHighlight;
+            const orientation = sliceScreenOrientation(kind, index);
             if (!orientation) {
                 return false;
             }
@@ -491,20 +537,19 @@
                 return false;
             }
 
-            const sign = resolveTurnSign(kind, layer, screenDir);
+            const sign = resolveTurnSign(kind, index, screenDir);
             if (sign === null) {
                 return false;
             }
 
-            const axisName = sliceAxisName(kind);
-            const perm = LAYER_PERM[`${axisName}:${layer}:${sign}`];
+            const perm = RING_PERM[`${kind}:${index}:${sign}`];
             if (!perm) {
                 return false;
             }
 
             applyPermutation(perm);
             renderCube();
-            showSliceHighlight(kind, layer);
+            showSliceHighlight(kind, index);
             return true;
         }
 
@@ -643,14 +688,14 @@
             removeHighlightVisuals();
         }
 
-        function showSliceHighlight(kind, layer) {
-            if (!layer) {
+        function showSliceHighlight(kind, index) {
+            if (index === undefined || index === null) {
                 return;
             }
 
             removeHighlightVisuals();
-            applySliceHighlight(kind, layer);
-            activeHighlight = { kind, layer };
+            applySliceHighlight(kind, index);
+            activeHighlight = { kind, index };
         }
 
         function unlockHighlight() {
@@ -665,25 +710,21 @@
             disableSliceKeyboard();
         }
 
-        function lockHighlight(kind, layer) {
-            lockedHighlight = { kind, layer };
-            activeHighlight = { kind, layer };
-            showSliceHighlight(kind, layer);
+        function lockHighlight(kind, index) {
+            lockedHighlight = { kind, index };
+            activeHighlight = { kind, index };
+            showSliceHighlight(kind, index);
             enableSliceKeyboard();
         }
 
-        function applySliceHighlight(kind, layer) {
-            if (!layer) {
+        function applySliceHighlight(kind, index) {
+            const ring = ringStickers(kind, index);
+            if (ring.length !== 12) {
                 return;
             }
 
-            const axisName = sliceAxisName(kind);
-            const layerKey = String(layer);
-            SLOT_LIST.forEach((slot) => {
-                if (slot.layers[axisName] !== layerKey) {
-                    return;
-                }
-                const stickerEl = sticker(slot.face, slot.row, slot.col);
+            ring.forEach(({ face, row, col }) => {
+                const stickerEl = sticker(face, row, col);
                 if (stickerEl) {
                     stickerEl.classList.add('slice-highlight');
                 }
@@ -709,6 +750,7 @@
 
                 const slice = sliceFromZone(zone);
                 if (!slice) {
+                    clearHoverHighlight();
                     return;
                 }
 
@@ -716,13 +758,13 @@
                     clearTimeout(highlightTimer);
                 }
 
-                const { kind, layer } = slice;
+                const { kind, index } = slice;
                 highlightTimer = setTimeout(() => {
                     highlightTimer = null;
                     if (lockedHighlight) {
                         return;
                     }
-                    showSliceHighlight(kind, layer);
+                    showSliceHighlight(kind, index);
                 }, HIGHLIGHT_DELAY_MS);
             });
 
@@ -740,12 +782,12 @@
                     return;
                 }
 
-                if (highlightKey(slice.kind, slice.layer) !== highlightKey(activeHighlight.kind, activeHighlight.layer)) {
+                if (highlightKey(slice.kind, slice.index) !== highlightKey(activeHighlight.kind, activeHighlight.index)) {
                     return;
                 }
 
                 event.stopPropagation();
-                lockHighlight(slice.kind, slice.layer);
+                lockHighlight(slice.kind, slice.index);
             });
         }
 
@@ -768,7 +810,8 @@
 
         buildCube();
         SLOT_LIST = buildSlotList();
-        LAYER_PERM = buildLayerPermutations();
+        buildSliceRings();
+        RING_PERM = buildRingPermutations();
         initCubeState();
         renderCube();
 
