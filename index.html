@@ -61,15 +61,6 @@
         .sticker {
             border-radius: 4px;
             border: 1px solid rgba(0, 0, 0, 0.35);
-            pointer-events: none;
-        }
-
-        .sticker.slice-highlight {
-            outline: 3px solid rgba(255, 255, 255, 0.95);
-            outline-offset: -1px;
-            filter: brightness(1.3);
-            box-shadow: 0 0 14px rgba(255, 255, 255, 0.75);
-            z-index: 2;
         }
 
         .face[data-face="front"]  { transform: rotateY(0deg) translateZ(105px); }
@@ -87,10 +78,6 @@
 
     <script>
         const FACE_NAMES = ['front', 'back', 'right', 'left', 'top', 'bottom'];
-        const SIDE_FACES = ['front', 'right', 'back', 'left'];
-        const HIGHLIGHT_DELAY_MS = 500;
-        const PERSPECTIVE_PX = 700;
-        const CUBE_UNIT_PX = 105;
 
         const COLORS = {
             front:  '#009b48',
@@ -101,578 +88,11 @@
             bottom: '#ffd500'
         };
 
-        const FACE_BASIS = {
-            front:  { n: [0, 0, 1],  right: [1, 0, 0],  down: [0, -1, 0] },
-            back:   { n: [0, 0, -1], right: [-1, 0, 0], down: [0, -1, 0] },
-            right:  { n: [1, 0, 0],  right: [0, 0, -1], down: [0, -1, 0] },
-            left:   { n: [-1, 0, 0], right: [0, 0, 1],  down: [0, -1, 0] },
-            top:    { n: [0, 1, 0],  right: [1, 0, 0],  down: [0, 0, -1] },
-            bottom: { n: [0, -1, 0], right: [1, 0, 0],  down: [0, 0, 1] }
-        };
-
         const cube = document.getElementById('cube');
         const stickers = {};
-        const cubeState = {};
-        let highlightTimer = null;
-        let activeHighlight = null;
-        let lockedHighlight = null;
-        let sliceKeydownListener = null;
-
-        const CUBE_AXES = {
-            x: [1, 0, 0],
-            y: [0, 1, 0],
-            z: [0, 0, 1]
-        };
-
-        let SLOT_LIST = [];
-        let RING_PERM = {};
-        let COLUMN_CYCLES = [];
-        let ROW_CYCLES = [];
-        let SLICE_RINGS = { column: [], row: [] };
-
-        function buildColumnCycles(index) {
-            const col = index;
-            const backCol = 2 - col;
-            const cycles = [];
-            for (let row = 0; row < 3; row++) {
-                cycles.push([
-                    { face: 'front', row, col },
-                    { face: 'top', row: 2 - row, col },
-                    { face: 'back', row: 2 - row, col: backCol },
-                    { face: 'bottom', row: 2 - row, col }
-                ]);
-            }
-            return cycles;
-        }
-
-        function buildRowCycles(index) {
-            const row = index;
-            const cycles = [];
-            for (let col = 0; col < 3; col++) {
-                cycles.push([
-                    { face: 'front', row, col },
-                    { face: 'right', row, col },
-                    { face: 'back', row, col: 2 - col },
-                    { face: 'left', row, col: 2 - col }
-                ]);
-            }
-            return cycles;
-        }
-
-        function flattenCycles(cycles) {
-            return cycles.flat();
-        }
-
-        function buildSliceRings() {
-            COLUMN_CYCLES = [0, 1, 2].map((index) => buildColumnCycles(index));
-            ROW_CYCLES = [0, 1, 2].map((index) => buildRowCycles(index));
-            SLICE_RINGS = {
-                column: COLUMN_CYCLES.map((cycles) => flattenCycles(cycles)),
-                row: ROW_CYCLES.map((cycles) => flattenCycles(cycles))
-            };
-        }
-
-        function identityPermutation() {
-            const perm = {};
-            SLOT_LIST.forEach((slot) => {
-                perm[slotKey(slot.face, slot.index)] = slotKey(slot.face, slot.index);
-            });
-            return perm;
-        }
-
-        function buildRingPermutation(cycles, sign) {
-            const perm = identityPermutation();
-            cycles.forEach((cycle) => {
-                for (let i = 0; i < cycle.length; i++) {
-                    const dest = cycle[i];
-                    const src = cycle[(i - sign + cycle.length) % cycle.length];
-                    perm[slotKey(dest.face, dest.row * 3 + dest.col)] = slotKey(src.face, src.row * 3 + src.col);
-                }
-            });
-            return perm;
-        }
-
-        function buildRingPermutations() {
-            const perms = {};
-            COLUMN_CYCLES.forEach((cycles, index) => {
-                [1, -1].forEach((sign) => {
-                    perms[`column:${index}:${sign}`] = buildRingPermutation(cycles, sign);
-                });
-            });
-            ROW_CYCLES.forEach((cycles, index) => {
-                [1, -1].forEach((sign) => {
-                    perms[`row:${index}:${sign}`] = buildRingPermutation(cycles, sign);
-                });
-            });
-            return perms;
-        }
-
-        function orderedPerimeterKinds(face, row, col) {
-            const [x, y, z] = worldPos(face, row, col);
-            const atTopOrBottom = y > 0.5 || y < -0.5;
-            const kinds = [];
-
-            let column = false;
-            if (face === 'top' || face === 'bottom') {
-                column = Math.abs(x) > 0.5 || Math.abs(z) > 0.5;
-            } else if (SIDE_FACES.includes(face) && atTopOrBottom) {
-                column = true;
-            }
-
-            let rowEdge = false;
-            if (SIDE_FACES.includes(face)) {
-                if ((face === 'front' || face === 'back') && Math.abs(x) > 0.5) {
-                    rowEdge = true;
-                }
-                if ((face === 'left' || face === 'right') && Math.abs(z) > 0.5) {
-                    rowEdge = true;
-                }
-            }
-
-            if (column) {
-                kinds.push('column');
-            }
-            if (rowEdge) {
-                kinds.push('row');
-            }
-
-            if (kinds.length === 2) {
-                return Math.abs(y) > 0.5 ? ['column', 'row'] : ['row', 'column'];
-            }
-            return kinds;
-        }
-
-        function ringContainsSticker(ring, face, row, col) {
-            return ring.some((entry) => entry.face === face && entry.row === row && entry.col === col);
-        }
-
-        function highlightKey(kind, index) {
-            return `${kind}:${index}`;
-        }
-
-        function sliceFromFacelet(face, row, col) {
-            if (!face) {
-                return null;
-            }
-
-            const kinds = orderedPerimeterKinds(face, row, col);
-            for (let k = 0; k < kinds.length; k++) {
-                const kind = kinds[k];
-                const rings = SLICE_RINGS[kind];
-                for (let index = 0; index < rings.length; index++) {
-                    if (ringContainsSticker(rings[index], face, row, col)) {
-                        return { kind, index };
-                    }
-                }
-            }
-            return null;
-        }
-
-        function add3(a, b) {
-            return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-        }
-
-        function sub3(a, b) {
-            return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-        }
-
-        function scale3(v, s) {
-            return [v[0] * s, v[1] * s, v[2] * s];
-        }
-
-        function dot3(a, b) {
-            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        }
-
-        function normalize3(v) {
-            const len = Math.hypot(v[0], v[1], v[2]) || 1;
-            return [v[0] / len, v[1] / len, v[2] / len];
-        }
-
-        function viewTransformVec(vec, rxDeg, ryDeg) {
-            const rx = rxDeg * Math.PI / 180;
-            const ry = ryDeg * Math.PI / 180;
-            let x = vec[0];
-            let y = vec[1];
-            let z = vec[2];
-            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
-            z = y * Math.sin(rx) + z * Math.cos(rx);
-            y = y1;
-            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-            z = -x * Math.sin(ry) + z * Math.cos(ry);
-            return [x1, y, z];
-        }
-
-        function raycastFacelet(clientX, clientY) {
-            const rect = viewport.getBoundingClientRect();
-            const sx = clientX - rect.left - rect.width / 2;
-            const sy = clientY - rect.top - rect.height / 2;
-            const rayDir = normalize3([sx / PERSPECTIVE_PX, -sy / PERSPECTIVE_PX, -1]);
-            const rayOrig = [0, 0, PERSPECTIVE_PX / CUBE_UNIT_PX];
-
-            let best = null;
-            let bestDepth = -Infinity;
-
-            FACE_NAMES.forEach((face) => {
-                const basis = FACE_BASIS[face];
-                const center = viewTransformVec(scale3(basis.n, 1.5), rotation.x, rotation.y);
-                const normal = normalize3(viewTransformVec(basis.n, rotation.x, rotation.y));
-                const right = viewTransformVec(basis.right, rotation.x, rotation.y);
-                const down = viewTransformVec(basis.down, rotation.x, rotation.y);
-
-                const denom = dot3(rayDir, normal);
-                if (denom >= -0.001) {
-                    return;
-                }
-
-                const t = dot3(sub3(center, rayOrig), normal) / denom;
-                if (t < 0) {
-                    return;
-                }
-
-                const hit = add3(rayOrig, scale3(rayDir, t));
-                const rel = sub3(hit, center);
-                const u = dot3(rel, right);
-                const v = dot3(rel, down);
-                if (u < -1.02 || u > 1.02 || v < -1.02 || v > 1.02) {
-                    return;
-                }
-
-                if (hit[2] <= bestDepth) {
-                    return;
-                }
-
-                const col = Math.min(2, Math.max(0, Math.floor(((u + 1) / 2) * 3)));
-                const row = Math.min(2, Math.max(0, Math.floor(((1 - v) / 2) * 3)));
-
-                bestDepth = hit[2];
-                best = { face, row, col };
-            });
-
-            return best;
-        }
-
-        function sliceEquals(a, b) {
-            return a && b && highlightKey(a.kind, a.index) === highlightKey(b.kind, b.index);
-        }
-
-        function scheduleHoverHighlight(slice) {
-            if (lockedHighlight || !slice) {
-                return;
-            }
-
-            if (highlightTimer !== null) {
-                clearTimeout(highlightTimer);
-            }
-
-            const target = { ...slice };
-            highlightTimer = setTimeout(() => {
-                highlightTimer = null;
-                if (lockedHighlight) {
-                    return;
-                }
-                showSliceHighlight(target.kind, target.index);
-            }, HIGHLIGHT_DELAY_MS);
-        }
-
-        function updateHoverFromPointer(clientX, clientY) {
-            if (lockedHighlight || isDragging) {
-                return;
-            }
-
-            const hit = raycastFacelet(clientX, clientY);
-            const slice = hit ? sliceFromFacelet(hit.face, hit.row, hit.col) : null;
-
-            if (!slice) {
-                clearHoverHighlight();
-                return;
-            }
-
-            if (sliceEquals(slice, activeHighlight) && highlightTimer === null && document.querySelector('.sticker.slice-highlight')) {
-                return;
-            }
-
-            if (sliceEquals(slice, activeHighlight) && highlightTimer !== null) {
-                return;
-            }
-
-            clearHoverHighlight();
-            scheduleHoverHighlight(slice);
-        }
 
         function stickerId(face, row, col) {
             return `${face}:${row}:${col}`;
-        }
-
-        function snapLayer(value) {
-            if (value < -0.5) {
-                return '-1';
-            }
-            if (value > 0.5) {
-                return '1';
-            }
-            return '0';
-        }
-
-        function worldPos(face, row, col) {
-            const basis = FACE_BASIS[face];
-            const u = col - 1;
-            const v = 1 - row;
-            return [
-                basis.n[0] * 1.5 + basis.right[0] * u + basis.down[0] * v,
-                basis.n[1] * 1.5 + basis.right[1] * u + basis.down[1] * v,
-                basis.n[2] * 1.5 + basis.right[2] * u + basis.down[2] * v
-            ];
-        }
-
-        function layerCoords(face, row, col) {
-            const [x, y, z] = worldPos(face, row, col);
-            return {
-                x: snapLayer(x),
-                y: snapLayer(y),
-                z: snapLayer(z)
-            };
-        }
-
-        function slotKey(face, index) {
-            return `${face}:${index}`;
-        }
-
-        function vecDot(a, b) {
-            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        }
-
-        function rotateAroundAxis(vec, axis, angle) {
-            const [x, y, z] = vec;
-            const [ux, uy, uz] = axis;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const dot = vecDot(vec, axis);
-            return [
-                x * cos + (uy * z - uz * y) * sin + ux * dot * (1 - cos),
-                y * cos + (uz * x - ux * z) * sin + uy * dot * (1 - cos),
-                z * cos + (ux * y - uy * x) * sin + uz * dot * (1 - cos)
-            ];
-        }
-
-        function viewTransform(vec, rxDeg, ryDeg) {
-            const rx = rxDeg * Math.PI / 180;
-            const ry = ryDeg * Math.PI / 180;
-            let x = vec[0];
-            let y = vec[1];
-            let z = vec[2];
-            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
-            z = y * Math.sin(rx) + z * Math.cos(rx);
-            y = y1;
-            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
-            z = -x * Math.sin(ry) + z * Math.cos(ry);
-            return { x: x1, y, z };
-        }
-
-        function buildSlotList() {
-            const slots = [];
-            FACE_NAMES.forEach((face) => {
-                for (let row = 0; row < 3; row++) {
-                    for (let col = 0; col < 3; col++) {
-                        const index = row * 3 + col;
-                        slots.push({
-                            face,
-                            row,
-                            col,
-                            index,
-                            pos: worldPos(face, row, col),
-                            layers: layerCoords(face, row, col)
-                        });
-                    }
-                }
-            });
-            return slots;
-        }
-
-        function initCubeState() {
-            FACE_NAMES.forEach((face) => {
-                cubeState[face] = Array.from({ length: 9 }, () => COLORS[face]);
-            });
-        }
-
-        function renderCube() {
-            FACE_NAMES.forEach((face) => {
-                for (let index = 0; index < 9; index++) {
-                    const row = Math.floor(index / 3);
-                    const col = index % 3;
-                    const stickerEl = sticker(face, row, col);
-                    if (stickerEl) {
-                        stickerEl.style.backgroundColor = cubeState[face][index];
-                    }
-                }
-            });
-        }
-
-        function applyPermutation(perm) {
-            const snapshot = {};
-            FACE_NAMES.forEach((face) => {
-                snapshot[face] = cubeState[face].slice();
-            });
-
-            FACE_NAMES.forEach((face) => {
-                for (let index = 0; index < 9; index++) {
-                    const sourceKey = perm[slotKey(face, index)];
-                    if (!sourceKey) {
-                        continue;
-                    }
-                    const [sourceFace, sourceIndex] = sourceKey.split(':');
-                    cubeState[face][index] = snapshot[sourceFace][Number(sourceIndex)];
-                }
-            });
-        }
-
-        function sliceAxisName(kind) {
-            return kind === 'column' ? 'x' : 'y';
-        }
-
-        function ringStickers(kind, index) {
-            return SLICE_RINGS[kind]?.[index] ?? [];
-        }
-
-        function sliceScreenOrientation(kind, index) {
-            const ring = ringStickers(kind, index);
-            if (ring.length !== 12) {
-                return null;
-            }
-
-            const views = ring.map(({ face, row, col }) => {
-                return viewTransform(worldPos(face, row, col), rotation.x, rotation.y);
-            });
-
-            const xs = views.map((point) => point.x);
-            const ys = views.map((point) => point.y);
-            const spreadX = Math.max(...xs) - Math.min(...xs);
-            const spreadY = Math.max(...ys) - Math.min(...ys);
-            return spreadX > spreadY * 0.55 ? 'horizontal' : 'vertical';
-        }
-
-        function frontmostStickerInRing(kind, index) {
-            const ring = ringStickers(kind, index);
-            let best = null;
-            let bestZ = -Infinity;
-
-            ring.forEach(({ face, row, col }) => {
-                const view = viewTransform(worldPos(face, row, col), rotation.x, rotation.y);
-                if (view.z > bestZ) {
-                    bestZ = view.z;
-                    best = { face, row, col };
-                }
-            });
-
-            return best;
-        }
-
-        function resolveTurnSign(kind, index, screenDir) {
-            const axisName = sliceAxisName(kind);
-            const axis = CUBE_AXES[axisName];
-            const testSticker = frontmostStickerInRing(kind, index);
-            if (!testSticker) {
-                return null;
-            }
-
-            const testPos = worldPos(testSticker.face, testSticker.row, testSticker.col);
-            const startView = viewTransform(testPos, rotation.x, rotation.y);
-            const screenScore = (sign) => {
-                const endPos = rotateAroundAxis(testPos, axis, sign * Math.PI / 2);
-                const endView = viewTransform(endPos, rotation.x, rotation.y);
-                const dx = endView.x - startView.x;
-                const dy = endView.y - startView.y;
-
-                if (screenDir === 'up') {
-                    return dy;
-                }
-                if (screenDir === 'down') {
-                    return -dy;
-                }
-                if (screenDir === 'right') {
-                    return dx;
-                }
-                return -dx;
-            };
-
-            const positive = screenScore(1);
-            const negative = screenScore(-1);
-            if (Math.abs(positive - negative) < 1e-6) {
-                return null;
-            }
-            return positive > negative ? 1 : -1;
-        }
-
-        function turnLockedSlice(screenDir) {
-            if (!lockedHighlight) {
-                return false;
-            }
-
-            const { kind, index } = lockedHighlight;
-            const orientation = sliceScreenOrientation(kind, index);
-            if (!orientation) {
-                return false;
-            }
-
-            if (orientation === 'vertical' && (screenDir === 'left' || screenDir === 'right')) {
-                return false;
-            }
-            if (orientation === 'horizontal' && (screenDir === 'up' || screenDir === 'down')) {
-                return false;
-            }
-
-            const sign = resolveTurnSign(kind, index, screenDir);
-            if (sign === null) {
-                return false;
-            }
-
-            const perm = RING_PERM[`${kind}:${index}:${sign}`];
-            if (!perm) {
-                return false;
-            }
-
-            applyPermutation(perm);
-            renderCube();
-            showSliceHighlight(kind, index);
-            return true;
-        }
-
-        function onSliceKeydown(event) {
-            if (!lockedHighlight) {
-                return;
-            }
-
-            const screenDirs = {
-                ArrowUp: 'up',
-                ArrowDown: 'down',
-                ArrowLeft: 'left',
-                ArrowRight: 'right'
-            };
-
-            const screenDir = screenDirs[event.key];
-            if (!screenDir) {
-                return;
-            }
-
-            if (turnLockedSlice(screenDir)) {
-                event.preventDefault();
-            }
-        }
-
-        function enableSliceKeyboard() {
-            if (sliceKeydownListener) {
-                return;
-            }
-            sliceKeydownListener = onSliceKeydown;
-            window.addEventListener('keydown', sliceKeydownListener);
-        }
-
-        function disableSliceKeyboard() {
-            if (!sliceKeydownListener) {
-                return;
-            }
-            window.removeEventListener('keydown', sliceKeydownListener);
-            sliceKeydownListener = null;
         }
 
         function buildCube() {
@@ -684,15 +104,11 @@
                 for (let row = 0; row < 3; row++) {
                     for (let col = 0; col < 3; col++) {
                         const sticker = document.createElement('div');
-                        const layers = layerCoords(face, row, col);
                         sticker.className = 'sticker';
                         sticker.dataset.face = face;
                         sticker.dataset.row = String(row);
                         sticker.dataset.col = String(col);
                         sticker.dataset.index = String(row * 3 + col);
-                        sticker.dataset.layerX = layers.x;
-                        sticker.dataset.layerY = layers.y;
-                        sticker.dataset.layerZ = layers.z;
                         sticker.style.backgroundColor = COLORS[face];
                         faceEl.appendChild(sticker);
                         stickers[stickerId(face, row, col)] = sticker;
@@ -700,69 +116,6 @@
                 }
 
                 cube.appendChild(faceEl);
-            });
-        }
-
-        function removeHighlightVisuals() {
-            document.querySelectorAll('.sticker.slice-highlight').forEach((sticker) => {
-                sticker.classList.remove('slice-highlight');
-            });
-        }
-
-        function clearHoverHighlight() {
-            if (highlightTimer !== null) {
-                clearTimeout(highlightTimer);
-                highlightTimer = null;
-            }
-
-            if (lockedHighlight) {
-                return;
-            }
-
-            activeHighlight = null;
-            removeHighlightVisuals();
-        }
-
-        function showSliceHighlight(kind, index) {
-            if (index === undefined || index === null) {
-                return;
-            }
-
-            removeHighlightVisuals();
-            applySliceHighlight(kind, index);
-            activeHighlight = { kind, index };
-        }
-
-        function unlockHighlight() {
-            if (highlightTimer !== null) {
-                clearTimeout(highlightTimer);
-                highlightTimer = null;
-            }
-
-            lockedHighlight = null;
-            activeHighlight = null;
-            removeHighlightVisuals();
-            disableSliceKeyboard();
-        }
-
-        function lockHighlight(kind, index) {
-            lockedHighlight = { kind, index };
-            activeHighlight = { kind, index };
-            showSliceHighlight(kind, index);
-            enableSliceKeyboard();
-        }
-
-        function applySliceHighlight(kind, index) {
-            const ring = ringStickers(kind, index);
-            if (ring.length !== 12) {
-                return;
-            }
-
-            ring.forEach(({ face, row, col }) => {
-                const stickerEl = sticker(face, row, col);
-                if (stickerEl) {
-                    stickerEl.classList.add('slice-highlight');
-                }
             });
         }
 
@@ -784,11 +137,6 @@
         }
 
         buildCube();
-        SLOT_LIST = buildSlotList();
-        buildSliceRings();
-        RING_PERM = buildRingPermutations();
-        initCubeState();
-        renderCube();
 
         const viewport = document.getElementById('viewport');
         const DEFAULT_ROTATION = { x: 0, y: 0 };
@@ -796,7 +144,6 @@
         let isDragging = false;
         let activePointerId = null;
         let lastPointer = { x: 0, y: 0 };
-        let dragDistance = 0;
 
         function applyRotation() {
             cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
@@ -808,56 +155,30 @@
         }
 
         viewport.addEventListener('pointerdown', (event) => {
-            isDragging = false;
-            dragDistance = 0;
+            isDragging = true;
             activePointerId = event.pointerId;
             lastPointer = { x: event.clientX, y: event.clientY };
+            viewport.classList.add('is-dragging');
             viewport.setPointerCapture(event.pointerId);
         });
 
         viewport.addEventListener('pointermove', (event) => {
-            if (activePointerId !== null && event.pointerId !== activePointerId) {
-                return;
-            }
-
-            if (activePointerId === null) {
-                updateHoverFromPointer(event.clientX, event.clientY);
+            if (!isDragging || event.pointerId !== activePointerId) {
                 return;
             }
 
             const dx = event.clientX - lastPointer.x;
             const dy = event.clientY - lastPointer.y;
-            dragDistance += Math.hypot(dx, dy);
-
-            if (dragDistance > 5) {
-                isDragging = true;
-                viewport.classList.add('is-dragging');
-                clearHoverHighlight();
-            }
-
-            if (isDragging) {
-                rotation.y += dx * 0.5;
-                rotation.x -= dy * 0.5;
-                applyRotation();
-                lastPointer = { x: event.clientX, y: event.clientY };
-                return;
-            }
-
-            updateHoverFromPointer(event.clientX, event.clientY);
             lastPointer = { x: event.clientX, y: event.clientY };
+
+            rotation.y += dx * 0.5;
+            rotation.x -= dy * 0.5;
+            applyRotation();
         });
 
-        function endPointer(event) {
-            if (event.pointerId !== activePointerId) {
+        function endDrag(event) {
+            if (!isDragging || (event.pointerId !== activePointerId && event.type !== 'pointercancel')) {
                 return;
-            }
-
-            if (!isDragging && !lockedHighlight && activeHighlight) {
-                const hit = raycastFacelet(event.clientX, event.clientY);
-                const slice = hit ? sliceFromFacelet(hit.face, hit.row, hit.col) : null;
-                if (sliceEquals(slice, activeHighlight)) {
-                    lockHighlight(activeHighlight.kind, activeHighlight.index);
-                }
             }
 
             isDragging = false;
@@ -869,19 +190,8 @@
             }
         }
 
-        viewport.addEventListener('pointerup', endPointer);
-        viewport.addEventListener('pointercancel', endPointer);
-
-        viewport.addEventListener('pointerleave', () => {
-            if (!lockedHighlight) {
-                clearHoverHighlight();
-            }
-        });
-
-        viewport.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            unlockHighlight();
-        });
+        viewport.addEventListener('pointerup', endDrag);
+        viewport.addEventListener('pointercancel', endDrag);
 
         applyRotation();
 
@@ -895,12 +205,7 @@
                 rotation = { x, y };
                 applyRotation();
             },
-            resetRotation,
-            getLockedHighlight: () => (lockedHighlight ? { ...lockedHighlight } : null),
-            unlockHighlight,
-            turnLockedSlice,
-            raycastFacelet,
-            sliceFromFacelet
+            resetRotation
         };
     </script>
 </body>
