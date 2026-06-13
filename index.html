@@ -72,55 +72,6 @@
             z-index: 2;
         }
 
-        .edge-zones {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .edge-zones--top {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            align-items: start;
-            height: 22px;
-        }
-
-        .edge-zones--bottom {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            align-items: end;
-            height: 22px;
-            top: auto;
-            bottom: 0;
-        }
-
-        .edge-zones--left {
-            display: grid;
-            grid-template-rows: repeat(3, 1fr);
-            justify-items: start;
-            width: 22px;
-        }
-
-        .edge-zones--right {
-            display: grid;
-            grid-template-rows: repeat(3, 1fr);
-            justify-items: end;
-            width: 22px;
-            left: auto;
-            right: 0;
-        }
-
-        .edge-hover-zone {
-            width: 100%;
-            height: 100%;
-            min-width: 18px;
-            min-height: 18px;
-            pointer-events: auto;
-            background: transparent;
-            cursor: default;
-        }
-
         .face[data-face="front"]  { transform: rotateY(0deg) translateZ(105px); }
         .face[data-face="back"]   { transform: rotateY(180deg) translateZ(105px); }
         .face[data-face="right"]  { transform: rotateY(90deg) translateZ(105px); }
@@ -138,6 +89,8 @@
         const FACE_NAMES = ['front', 'back', 'right', 'left', 'top', 'bottom'];
         const SIDE_FACES = ['front', 'right', 'back', 'left'];
         const HIGHLIGHT_DELAY_MS = 500;
+        const PERSPECTIVE_PX = 700;
+        const CUBE_UNIT_PX = 105;
 
         const COLORS = {
             front:  '#009b48',
@@ -254,14 +207,39 @@
             return perms;
         }
 
-        function isPerimeterTrigger(face, row, col, kind) {
-            if (kind === 'column') {
-                return SIDE_FACES.includes(face) && row === 0;
+        function orderedPerimeterKinds(face, row, col) {
+            const [x, y, z] = worldPos(face, row, col);
+            const atTopOrBottom = y > 0.5 || y < -0.5;
+            const kinds = [];
+
+            let column = false;
+            if (face === 'top' || face === 'bottom') {
+                column = Math.abs(x) > 0.5 || Math.abs(z) > 0.5;
+            } else if (SIDE_FACES.includes(face) && atTopOrBottom) {
+                column = true;
             }
-            if (kind === 'row') {
-                return SIDE_FACES.includes(face) && (col === 0 || col === 2);
+
+            let rowEdge = false;
+            if (SIDE_FACES.includes(face)) {
+                if ((face === 'front' || face === 'back') && Math.abs(x) > 0.5) {
+                    rowEdge = true;
+                }
+                if ((face === 'left' || face === 'right') && Math.abs(z) > 0.5) {
+                    rowEdge = true;
+                }
             }
-            return false;
+
+            if (column) {
+                kinds.push('column');
+            }
+            if (rowEdge) {
+                kinds.push('row');
+            }
+
+            if (kinds.length === 2) {
+                return Math.abs(y) > 0.5 ? ['column', 'row'] : ['row', 'column'];
+            }
+            return kinds;
         }
 
         function ringContainsSticker(ring, face, row, col) {
@@ -272,48 +250,154 @@
             return `${kind}:${index}`;
         }
 
-        function sliceFromFacelet(face, row, col, kind) {
-            if (!face || kind !== 'column' && kind !== 'row') {
+        function sliceFromFacelet(face, row, col) {
+            if (!face) {
                 return null;
             }
-            if (!isPerimeterTrigger(face, row, col, kind)) {
-                return null;
-            }
-            const rings = SLICE_RINGS[kind];
-            for (let index = 0; index < rings.length; index++) {
-                if (ringContainsSticker(rings[index], face, row, col)) {
-                    return { kind, index };
+
+            const kinds = orderedPerimeterKinds(face, row, col);
+            for (let k = 0; k < kinds.length; k++) {
+                const kind = kinds[k];
+                const rings = SLICE_RINGS[kind];
+                for (let index = 0; index < rings.length; index++) {
+                    if (ringContainsSticker(rings[index], face, row, col)) {
+                        return { kind, index };
+                    }
                 }
             }
             return null;
         }
 
-        function sliceFromZone(zone) {
-            const kind = zone.dataset.sliceKind;
-            if (!kind) {
-                return null;
-            }
-            if (zone.dataset.face && zone.dataset.row !== undefined && zone.dataset.col !== undefined) {
-                return sliceFromFacelet(
-                    zone.dataset.face,
-                    Number(zone.dataset.row),
-                    Number(zone.dataset.col),
-                    kind
-                );
-            }
-            return null;
+        function add3(a, b) {
+            return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
         }
 
-        function isFaceVisible(face) {
-            const view = viewTransform(FACE_BASIS[face].n, rotation.x, rotation.y);
-            return view.z > 0.05;
+        function sub3(a, b) {
+            return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
         }
 
-        function updateEdgeZonePointerEvents() {
-            document.querySelectorAll('.edge-hover-zone').forEach((zone) => {
-                const face = zone.dataset.face;
-                zone.style.pointerEvents = face && isFaceVisible(face) ? 'auto' : 'none';
+        function scale3(v, s) {
+            return [v[0] * s, v[1] * s, v[2] * s];
+        }
+
+        function dot3(a, b) {
+            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        }
+
+        function normalize3(v) {
+            const len = Math.hypot(v[0], v[1], v[2]) || 1;
+            return [v[0] / len, v[1] / len, v[2] / len];
+        }
+
+        function viewTransformVec(vec, rxDeg, ryDeg) {
+            const rx = rxDeg * Math.PI / 180;
+            const ry = ryDeg * Math.PI / 180;
+            let x = vec[0];
+            let y = vec[1];
+            let z = vec[2];
+            const y1 = y * Math.cos(rx) - z * Math.sin(rx);
+            z = y * Math.sin(rx) + z * Math.cos(rx);
+            y = y1;
+            const x1 = x * Math.cos(ry) + z * Math.sin(ry);
+            z = -x * Math.sin(ry) + z * Math.cos(ry);
+            return [x1, y, z];
+        }
+
+        function raycastFacelet(clientX, clientY) {
+            const rect = viewport.getBoundingClientRect();
+            const sx = clientX - rect.left - rect.width / 2;
+            const sy = clientY - rect.top - rect.height / 2;
+            const rayDir = normalize3([sx / PERSPECTIVE_PX, -sy / PERSPECTIVE_PX, -1]);
+            const rayOrig = [0, 0, PERSPECTIVE_PX / CUBE_UNIT_PX];
+
+            let best = null;
+            let bestDepth = -Infinity;
+
+            FACE_NAMES.forEach((face) => {
+                const basis = FACE_BASIS[face];
+                const center = viewTransformVec(scale3(basis.n, 1.5), rotation.x, rotation.y);
+                const normal = normalize3(viewTransformVec(basis.n, rotation.x, rotation.y));
+                const right = viewTransformVec(basis.right, rotation.x, rotation.y);
+                const down = viewTransformVec(basis.down, rotation.x, rotation.y);
+
+                const denom = dot3(rayDir, normal);
+                if (denom >= -0.001) {
+                    return;
+                }
+
+                const t = dot3(sub3(center, rayOrig), normal) / denom;
+                if (t < 0) {
+                    return;
+                }
+
+                const hit = add3(rayOrig, scale3(rayDir, t));
+                const rel = sub3(hit, center);
+                const u = dot3(rel, right);
+                const v = dot3(rel, down);
+                if (u < -1.02 || u > 1.02 || v < -1.02 || v > 1.02) {
+                    return;
+                }
+
+                if (hit[2] <= bestDepth) {
+                    return;
+                }
+
+                const col = Math.min(2, Math.max(0, Math.floor(((u + 1) / 2) * 3)));
+                const row = Math.min(2, Math.max(0, Math.floor(((1 - v) / 2) * 3)));
+
+                bestDepth = hit[2];
+                best = { face, row, col };
             });
+
+            return best;
+        }
+
+        function sliceEquals(a, b) {
+            return a && b && highlightKey(a.kind, a.index) === highlightKey(b.kind, b.index);
+        }
+
+        function scheduleHoverHighlight(slice) {
+            if (lockedHighlight || !slice) {
+                return;
+            }
+
+            if (highlightTimer !== null) {
+                clearTimeout(highlightTimer);
+            }
+
+            const target = { ...slice };
+            highlightTimer = setTimeout(() => {
+                highlightTimer = null;
+                if (lockedHighlight) {
+                    return;
+                }
+                showSliceHighlight(target.kind, target.index);
+            }, HIGHLIGHT_DELAY_MS);
+        }
+
+        function updateHoverFromPointer(clientX, clientY) {
+            if (lockedHighlight || isDragging) {
+                return;
+            }
+
+            const hit = raycastFacelet(clientX, clientY);
+            const slice = hit ? sliceFromFacelet(hit.face, hit.row, hit.col) : null;
+
+            if (!slice) {
+                clearHoverHighlight();
+                return;
+            }
+
+            if (sliceEquals(slice, activeHighlight) && highlightTimer === null && document.querySelector('.sticker.slice-highlight')) {
+                return;
+            }
+
+            if (sliceEquals(slice, activeHighlight) && highlightTimer !== null) {
+                return;
+            }
+
+            clearHoverHighlight();
+            scheduleHoverHighlight(slice);
         }
 
         function stickerId(face, row, col) {
@@ -615,57 +699,8 @@
                     }
                 }
 
-                if (SIDE_FACES.includes(face)) {
-                    faceEl.appendChild(buildTopEdgeZones(face));
-                    faceEl.appendChild(buildSideEdgeZones(face, 'left'));
-                    faceEl.appendChild(buildSideEdgeZones(face, 'right'));
-                }
-
                 cube.appendChild(faceEl);
             });
-        }
-
-        function buildTopEdgeZones(face) {
-            const container = document.createElement('div');
-            container.className = 'edge-zones edge-zones--top';
-
-            for (let col = 0; col < 3; col++) {
-                const zone = document.createElement('div');
-                const anchor = layerCoords(face, 0, col);
-                zone.className = 'edge-hover-zone edge-hover-zone--column';
-                zone.dataset.sliceKind = 'column';
-                zone.dataset.face = face;
-                zone.dataset.row = '0';
-                zone.dataset.col = String(col);
-                zone.dataset.layerX = anchor.x;
-                zone.title = 'Column slice';
-                wireEdgeZone(zone);
-                container.appendChild(zone);
-            }
-
-            return container;
-        }
-
-        function buildSideEdgeZones(face, side) {
-            const container = document.createElement('div');
-            container.className = `edge-zones edge-zones--${side}`;
-
-            for (let row = 0; row < 3; row++) {
-                const col = side === 'left' ? 0 : 2;
-                const zone = document.createElement('div');
-                const anchor = layerCoords(face, row, col);
-                zone.className = 'edge-hover-zone edge-hover-zone--row';
-                zone.dataset.sliceKind = 'row';
-                zone.dataset.face = face;
-                zone.dataset.row = String(row);
-                zone.dataset.col = String(col);
-                zone.dataset.layerY = anchor.y;
-                zone.title = 'Row slice';
-                wireEdgeZone(zone);
-                container.appendChild(zone);
-            }
-
-            return container;
         }
 
         function removeHighlightVisuals() {
@@ -731,66 +766,6 @@
             });
         }
 
-        function wireEdgeZone(zone) {
-            zone.addEventListener('mouseenter', (event) => {
-                if (lockedHighlight) {
-                    return;
-                }
-
-                const face = zone.dataset.face;
-                if (!face || !isFaceVisible(face)) {
-                    return;
-                }
-
-                const topEl = document.elementFromPoint(event.clientX, event.clientY);
-                const topZone = topEl?.closest('.edge-hover-zone');
-                if (topZone !== zone) {
-                    return;
-                }
-
-                const slice = sliceFromZone(zone);
-                if (!slice) {
-                    clearHoverHighlight();
-                    return;
-                }
-
-                if (highlightTimer !== null) {
-                    clearTimeout(highlightTimer);
-                }
-
-                const { kind, index } = slice;
-                highlightTimer = setTimeout(() => {
-                    highlightTimer = null;
-                    if (lockedHighlight) {
-                        return;
-                    }
-                    showSliceHighlight(kind, index);
-                }, HIGHLIGHT_DELAY_MS);
-            });
-
-            zone.addEventListener('mouseleave', () => {
-                clearHoverHighlight();
-            });
-
-            zone.addEventListener('click', (event) => {
-                if (event.button !== 0 || lockedHighlight) {
-                    return;
-                }
-
-                const slice = sliceFromZone(zone);
-                if (!slice || !activeHighlight) {
-                    return;
-                }
-
-                if (highlightKey(slice.kind, slice.index) !== highlightKey(activeHighlight.kind, activeHighlight.index)) {
-                    return;
-                }
-
-                event.stopPropagation();
-                lockHighlight(slice.kind, slice.index);
-            });
-        }
-
         function sticker(face, row, col) {
             return stickers[stickerId(face, row, col)] ?? null;
         }
@@ -821,10 +796,10 @@
         let isDragging = false;
         let activePointerId = null;
         let lastPointer = { x: 0, y: 0 };
+        let dragDistance = 0;
 
         function applyRotation() {
             cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
-            updateEdgeZonePointerEvents();
         }
 
         function resetRotation() {
@@ -833,35 +808,56 @@
         }
 
         viewport.addEventListener('pointerdown', (event) => {
-            if (event.target.closest('.edge-hover-zone')) {
-                return;
-            }
-
-            isDragging = true;
+            isDragging = false;
+            dragDistance = 0;
             activePointerId = event.pointerId;
             lastPointer = { x: event.clientX, y: event.clientY };
-            viewport.classList.add('is-dragging');
-            clearHoverHighlight();
             viewport.setPointerCapture(event.pointerId);
         });
 
         viewport.addEventListener('pointermove', (event) => {
-            if (!isDragging || event.pointerId !== activePointerId) {
+            if (activePointerId !== null && event.pointerId !== activePointerId) {
+                return;
+            }
+
+            if (activePointerId === null) {
+                updateHoverFromPointer(event.clientX, event.clientY);
                 return;
             }
 
             const dx = event.clientX - lastPointer.x;
             const dy = event.clientY - lastPointer.y;
-            lastPointer = { x: event.clientX, y: event.clientY };
+            dragDistance += Math.hypot(dx, dy);
 
-            rotation.y += dx * 0.5;
-            rotation.x -= dy * 0.5;
-            applyRotation();
+            if (dragDistance > 5) {
+                isDragging = true;
+                viewport.classList.add('is-dragging');
+                clearHoverHighlight();
+            }
+
+            if (isDragging) {
+                rotation.y += dx * 0.5;
+                rotation.x -= dy * 0.5;
+                applyRotation();
+                lastPointer = { x: event.clientX, y: event.clientY };
+                return;
+            }
+
+            updateHoverFromPointer(event.clientX, event.clientY);
+            lastPointer = { x: event.clientX, y: event.clientY };
         });
 
-        function endDrag(event) {
-            if (!isDragging || (event.pointerId !== activePointerId && event.type !== 'pointercancel')) {
+        function endPointer(event) {
+            if (event.pointerId !== activePointerId) {
                 return;
+            }
+
+            if (!isDragging && !lockedHighlight && activeHighlight) {
+                const hit = raycastFacelet(event.clientX, event.clientY);
+                const slice = hit ? sliceFromFacelet(hit.face, hit.row, hit.col) : null;
+                if (sliceEquals(slice, activeHighlight)) {
+                    lockHighlight(activeHighlight.kind, activeHighlight.index);
+                }
             }
 
             isDragging = false;
@@ -873,8 +869,14 @@
             }
         }
 
-        viewport.addEventListener('pointerup', endDrag);
-        viewport.addEventListener('pointercancel', endDrag);
+        viewport.addEventListener('pointerup', endPointer);
+        viewport.addEventListener('pointercancel', endPointer);
+
+        viewport.addEventListener('pointerleave', () => {
+            if (!lockedHighlight) {
+                clearHoverHighlight();
+            }
+        });
 
         viewport.addEventListener('contextmenu', (event) => {
             event.preventDefault();
@@ -896,7 +898,9 @@
             resetRotation,
             getLockedHighlight: () => (lockedHighlight ? { ...lockedHighlight } : null),
             unlockHighlight,
-            turnLockedSlice
+            turnLockedSlice,
+            raycastFacelet,
+            sliceFromFacelet
         };
     </script>
 </body>
