@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Rubik's Cube</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111318; font-family: Inter, Arial, sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    .panel {
+      position: fixed; top: 16px; left: 16px; z-index: 2;
+      max-width: min(420px, calc(100vw - 32px));
+      padding: 12px 14px; border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px; background: rgba(14,16,21,.78);
+      backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    h1 { margin: 0 0 7px; font-size: 17px; }
+    p { margin: 4px 0; color: #c6cbd5; font-size: 13px; line-height: 1.35; }
+    .buttons { display: flex; gap: 8px; margin-top: 10px; }
+    button {
+      border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
+      padding: 7px 11px; background: #242936; color: #f3f5f9;
+      font-weight: 700; cursor: pointer;
+    }
+    button:hover { background: #303747; }
+    .badge {
+      display: inline-block; margin-top: 8px; padding: 3px 7px;
+      border-radius: 999px; background: rgba(255,255,255,.08);
+      color: #aeb7c7; font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>3D Rubik's Cube</h1>
+    <p><b>Drag outside the cube:</b> rotate your view.</p>
+    <p><b>Drag on the cube:</b> turn the touched row or column.</p>
+    <p><b>Mouse wheel:</b> zoom.</p>
+    <div class="buttons">
+      <button id="scramble">Scramble</button>
+      <button id="reset">Reset</button>
+    </div>
+    <span class="badge">Single-file Three.js simulation</span>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111318);
+
+    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(6.4, 5.4, 7.6);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    // Flat, even lighting from every direction.
+    // This prevents the bottom and rear faces from becoming visibly shadowed.
+    scene.add(new THREE.AmbientLight(0xffffff, 3.2));
+
+    const cubeRoot = new THREE.Group();
+    scene.add(cubeRoot);
+
+    const pivot = new THREE.Group();
+    cubeRoot.add(pivot);
+
+    const cubies = [];
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const SIZE = 0.96;
+    const STEP = 1.03;
+    const TURN_SENSITIVITY = 0.012;
+    const ORBIT_SENSITIVITY = 0.008;
+
+    const COLOR = {
+      right:  0xd62929, // red
+      left:   0xf28c28, // orange
+      top:    0xf4f4f4, // white
+      bottom: 0xf0d520, // yellow
+      front:  0x1da64a, // green
+      back:   0x275dd6, // blue
+      inside: 0x08090b
+    };
+
+    function material(color) {
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.42,
+        metalness: 0.02
+      });
+    }
+
+    function createCubie(x, y, z) {
+      const geometry = new THREE.BoxGeometry(SIZE, SIZE, SIZE);
+      const materials = [
+        material(x ===  1 ? COLOR.right  : COLOR.inside),
+        material(x === -1 ? COLOR.left   : COLOR.inside),
+        material(y ===  1 ? COLOR.top    : COLOR.inside),
+        material(y === -1 ? COLOR.bottom : COLOR.inside),
+        material(z ===  1 ? COLOR.front  : COLOR.inside),
+        material(z === -1 ? COLOR.back   : COLOR.inside)
+      ];
+
+      const mesh = new THREE.Mesh(geometry, materials);
+      mesh.position.set(x * STEP, y * STEP, z * STEP);
+      mesh.userData.home = { x, y, z };
+      mesh.userData.grid = new THREE.Vector3(x, y, z);
+
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0x020203 })
+      );
+      mesh.add(edges);
+
+      cubeRoot.add(mesh);
+      cubies.push(mesh);
+      return mesh;
+    }
+
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        for (let z = -1; z <= 1; z++) createCubie(x, y, z);
+      }
+    }
+
+    let spherical = new THREE.Spherical();
+    spherical.setFromVector3(camera.position);
+
+    function updateCamera() {
+      spherical.radius = THREE.MathUtils.clamp(spherical.radius, 5, 15);
+      spherical.phi = THREE.MathUtils.clamp(spherical.phi, 0.16, Math.PI - 0.16);
+      camera.position.setFromSpherical(spherical);
+      camera.lookAt(0, 0, 0);
+    }
+
+    function setRay(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+    }
+
+    function firstCubeHit(event) {
+      setRay(event);
+      return raycaster.intersectObjects(cubies, false)[0] ?? null;
+    }
+
+    function axisIndex(v) {
+      const a = [Math.abs(v.x), Math.abs(v.y), Math.abs(v.z)];
+      return a.indexOf(Math.max(...a));
+    }
+
+    function canonicalAxis(index) {
+      return [
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(0, 0, 1)
+      ][index];
+    }
+
+    function component(v, index) {
+      return index === 0 ? v.x : index === 1 ? v.y : v.z;
+    }
+
+    function projectAxisToScreen(axis) {
+      const origin = new THREE.Vector3(0, 0, 0).project(camera);
+      const tip = axis.clone().project(camera);
+      return new THREE.Vector2(tip.x - origin.x, -(tip.y - origin.y)).normalize();
+    }
+
+    function roundGridPosition(mesh) {
+      mesh.position.set(
+        Math.round(mesh.position.x / STEP) * STEP,
+        Math.round(mesh.position.y / STEP) * STEP,
+        Math.round(mesh.position.z / STEP) * STEP
+      );
+      mesh.userData.grid.set(
+        Math.round(mesh.position.x / STEP),
+        Math.round(mesh.position.y / STEP),
+        Math.round(mesh.position.z / STEP)
+      );
+    }
+
+    function snapOrientation(mesh) {
+      mesh.updateMatrix();
+      const m = new THREE.Matrix4().makeRotationFromQuaternion(mesh.quaternion);
+      const e = m.elements;
+      for (const i of [0,1,2,4,5,6,8,9,10]) {
+        e[i] = Math.abs(e[i]) < 0.5 ? 0 : Math.sign(e[i]);
+      }
+      mesh.quaternion.setFromRotationMatrix(m).normalize();
+    }
+
+    function attachSlice(axis, layer) {
+      const selected = cubies.filter(cubie =>
+        Math.round(component(cubie.userData.grid, axisIndex(axis))) === layer
+      );
+      selected.forEach(cubie => pivot.attach(cubie));
+      return selected;
+    }
+
+    function detachSlice(selected) {
+      selected.forEach(cubie => {
+        cubeRoot.attach(cubie);
+        roundGridPosition(cubie);
+        snapOrientation(cubie);
+      });
+      pivot.quaternion.identity();
+      pivot.rotation.set(0, 0, 0);
+    }
+
+    let gesture = null;
+    let busy = false;
+
+    renderer.domElement.addEventListener('pointerdown', event => {
+      if (busy) return;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      const hit = firstCubeHit(event);
+
+      if (!hit) {
+        gesture = {
+          type: 'orbit',
+          startX: event.clientX,
+          startY: event.clientY,
+          theta: spherical.theta,
+          phi: spherical.phi
+        };
+        return;
+      }
+
+      const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+      const faceNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+      faceNormal.set(
+        Math.round(faceNormal.x),
+        Math.round(faceNormal.y),
+        Math.round(faceNormal.z)
+      ).normalize();
+
+      gesture = {
+        type: 'slice-pending',
+        startX: event.clientX,
+        startY: event.clientY,
+        faceNormal,
+        cubie: hit.object,
+        axis: null,
+        axisVec: null,
+        selected: null,
+        angle: 0
+      };
+    });
+
+    renderer.domElement.addEventListener('pointermove', event => {
+      if (!gesture || busy) return;
+      const dx = event.clientX - gesture.startX;
+      const dy = event.clientY - gesture.startY;
+
+      if (gesture.type === 'orbit') {
+        spherical.theta = gesture.theta - dx * ORBIT_SENSITIVITY;
+        spherical.phi = gesture.phi - dy * ORBIT_SENSITIVITY;
+        updateCamera();
+        return;
+      }
+
+      const drag = new THREE.Vector2(dx, dy);
+      if (drag.length() < 5) return;
+
+      if (gesture.type === 'slice-pending') {
+        const normalAxis = axisIndex(gesture.faceNormal);
+        const tangentAxes = [0, 1, 2].filter(index => index !== normalAxis);
+
+        let best = null;
+        for (const tangentIndex of tangentAxes) {
+          const tangent = canonicalAxis(tangentIndex);
+          const screen = projectAxisToScreen(tangent);
+          const score = Math.abs(screen.dot(drag.clone().normalize()));
+          if (!best || score > best.score) best = { tangent, screen, score };
+        }
+
+        const rotationAxis = gesture.faceNormal.clone().cross(best.tangent).normalize();
+        const layer = Math.round(component(gesture.cubie.userData.grid, axisIndex(rotationAxis)));
+
+        gesture.type = 'slice';
+        gesture.axis = rotationAxis;
+        gesture.screenTangent = best.screen;
+        gesture.selected = attachSlice(rotationAxis, layer);
+      }
+
+      const pixelsAlongTurn = gesture.screenTangent.dot(drag);
+      gesture.angle = THREE.MathUtils.clamp(
+        pixelsAlongTurn * TURN_SENSITIVITY,
+        -Math.PI * 0.62,
+        Math.PI * 0.62
+      );
+      pivot.quaternion.setFromAxisAngle(gesture.axis, gesture.angle);
+    });
+
+    function animateSlice(targetAngle, selected, axis, startAngle) {
+      busy = true;
+      const duration = 150;
+      const start = performance.now();
+
+      function frame(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const angle = THREE.MathUtils.lerp(startAngle, targetAngle, eased);
+        pivot.quaternion.setFromAxisAngle(axis, angle);
+
+        if (t < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          detachSlice(selected);
+          busy = false;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+
+    function endGesture() {
+      if (!gesture || busy) return;
+
+      if (gesture.type === 'slice') {
+        const target = Math.abs(gesture.angle) < 0.22
+          ? 0
+          : Math.sign(gesture.angle) * Math.PI / 2;
+        animateSlice(target, gesture.selected, gesture.axis, gesture.angle);
+      }
+
+      gesture = null;
+    }
+
+    renderer.domElement.addEventListener('pointerup', endGesture);
+    renderer.domElement.addEventListener('pointercancel', endGesture);
+    renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
+
+    renderer.domElement.addEventListener('wheel', event => {
+      event.preventDefault();
+      spherical.radius += event.deltaY * 0.006;
+      updateCamera();
+    }, { passive: false });
+
+    function applyQuarterTurn(axisIndexValue, layer, direction) {
+      const axis = canonicalAxis(axisIndexValue);
+      const selected = attachSlice(axis, layer);
+      pivot.quaternion.setFromAxisAngle(axis, direction * Math.PI / 2);
+      detachSlice(selected);
+    }
+
+    document.getElementById('scramble').addEventListener('click', () => {
+      if (busy) return;
+      for (let i = 0; i < 24; i++) {
+        const axis = Math.floor(Math.random() * 3);
+        const layer = Math.floor(Math.random() * 3) - 1;
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        applyQuarterTurn(axis, layer, direction);
+      }
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      if (busy) return;
+      cubies.forEach(cubie => {
+        cubeRoot.attach(cubie);
+        const { x, y, z } = cubie.userData.home;
+        cubie.position.set(x * STEP, y * STEP, z * STEP);
+        cubie.quaternion.identity();
+        cubie.userData.grid.set(x, y, z);
+      });
+      pivot.quaternion.identity();
+      pivot.rotation.set(0, 0, 0);
+    });
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    updateCamera();
+    animate();
+  </script>
+</body>
+</html>
