@@ -1,5 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta charset="utf-8">
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=0">
+	<title>Cube</title>
+	<link rel="stylesheet" type="text/css" href="style.css" />
+	<script src="cube.js"></script>
+	<script src="piece.js"></script>
+	<script src="face.js"></script>
+	<script src="controller.js"></script>
+</head>
+
+<body>
+	<h1 id="time"></h1>
+	<button onclick="openSettings()">Settings</button>
+	<div id="settingsDiv">
+		Size: <input type="number" id="size" /> <br>
+		Turn Speed: <input type="number" id="turnSpeed" step=".1" /> <br>
+		Animate: <input type="checkbox" id="animate" /> <br>
+		Cube Size: <input type="text" id="cubeSize" /> <br>
+		Opaque: <input type="checkbox" id="opaque" /> <br>
+		Inspection: <input type="checkbox" id="inspection" /> <br>
+		Inspection Time: <input type="number" id="inspectionTime" /> <br>
+		<button onclick="updateSettings()"> Apply </button> <br>
+		<button onclick="document.getElementById('settingsDiv').style.display = 'none'"> Cancel </button>
+	</div>
+	<Cube id="cube"></Cube>
+	<script>
+		const c = new Cube();
+		c.generate();
+		const timer = new Controller(c);
+
+		function openSettings() {
+			document.getElementById("settingsDiv").style.display = "block";
+			document.getElementById("size").value = c.settings.dim[0];
+			document.getElementById("turnSpeed").value = c.settings.turnSpeed;
+			document.getElementById("animate").checked = c.settings.animate;
+			document.getElementById("cubeSize").value = c.settings.cubeSize;
+			document.getElementById("opaque").checked = c.settings.opaque;
+			document.getElementById("inspection").checked = timer.settings.inspectionTime > -1
+			document.getElementById("inspectionTime").value = timer.settings.inspectionTime;
+		}
+
+		function updateSettings() {
+			document.getElementById("settingsDiv").style.display = "none";
+			const size = Number(document.getElementById("size").value);
+			c.settings.dim = [size, size, size];
+			c.settings.turnSpeed = Number(document.getElementById("turnSpeed").value);
+			c.settings.animate = Boolean(document.getElementById("animate").checked);
+			c.settings.cubeSize = Number(document.getElementById("cubeSize").value);
+			c.settings.opaque = document.getElementById("opaque").checked;
+			timer.settings.inspectionTime = document.getElementById("inspection").checked ? document.getElementById(
+				"inspectionTime").value : -1;
+			c.generate()
+		}
+	</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -532,4 +589,5 @@
         };
     </script>
 </body>
+
 </html>
