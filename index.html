@@ -3,12 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>3D Rubik's Cube</title>
+  <title>3D Letter Cube</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111318; font-family: Inter, Arial, sans-serif; }
-    canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #111318;
+      font-family: Inter, Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+    }
     canvas:active { cursor: grabbing; }
     .controls {
       position: fixed;
@@ -20,9 +33,13 @@
       gap: 8px;
     }
     button {
-      border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
-      padding: 7px 11px; background: #242936; color: #f3f5f9;
-      font-weight: 700; cursor: pointer;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 8px;
+      padding: 7px 11px;
+      background: #242936;
+      color: #f3f5f9;
+      font-weight: 700;
+      cursor: pointer;
     }
     button:hover { background: #303747; }
   </style>
@@ -49,8 +66,7 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
-    // Flat, even lighting from every direction.
-    // This prevents the bottom and rear faces from becoming visibly shadowed.
+    // Uniform lighting around the entire cube.
     scene.add(new THREE.AmbientLight(0xffffff, 3.2));
 
     const cubeRoot = new THREE.Group();
@@ -65,18 +81,29 @@
 
     const SIZE = 0.96;
     const STEP = 1.03;
+    const STICKER_SIZE = 0.82;
+    const STICKER_OFFSET = SIZE / 2 + 0.004;
     const TURN_SENSITIVITY = 0.012;
     const ORBIT_SENSITIVITY = 0.008;
 
     const COLOR = {
-      right:  0xd62929, // red
-      left:   0xf28c28, // orange
-      top:    0xf4f4f4, // white
-      bottom: 0xf0d520, // yellow
-      front:  0x1da64a, // green
-      back:   0x275dd6, // blue
+      right:  0xd62929,
+      left:   0xf28c28,
+      top:    0xf4f4f4,
+      bottom: 0xf0d520,
+      front:  0x1da64a,
+      back:   0x275dd6,
       inside: 0x08090b
     };
+
+    const FACE_DIRECTIONS = [
+      { normal: new THREE.Vector3( 1, 0, 0), color: COLOR.right  },
+      { normal: new THREE.Vector3(-1, 0, 0), color: COLOR.left   },
+      { normal: new THREE.Vector3( 0, 1, 0), color: COLOR.top    },
+      { normal: new THREE.Vector3( 0,-1, 0), color: COLOR.bottom },
+      { normal: new THREE.Vector3( 0, 0, 1), color: COLOR.front  },
+      { normal: new THREE.Vector3( 0, 0,-1), color: COLOR.back   }
+    ];
 
     function material(color) {
       return new THREE.MeshStandardMaterial({
@@ -98,49 +125,88 @@
       return luminance > 0.62 ? '#111318' : '#f8f9fc';
     }
 
-    function materialWithLetter(color, letter) {
+    function createLetterTexture(color, letter) {
       const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
+      canvas.width = 256;
+      canvas.height = 256;
+
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
-      ctx.fillRect(0, 0, 128, 128);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       ctx.fillStyle = textColorForBackground(color);
-      ctx.font = 'bold 76px Inter, Arial, sans-serif';
+      ctx.font = 'bold 152px Inter, Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(letter, 64, 66);
+      ctx.fillText(letter, 128, 133);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
-
-      return new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 0.42,
-        metalness: 0.02
-      });
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return texture;
     }
 
-    function faceMaterial(color) {
-      if (color === COLOR.inside) return material(color);
-      return materialWithLetter(color, randomLetter());
+    function makeBasisQuaternion(normal, up) {
+      const right = up.clone().cross(normal).normalize();
+      const correctedUp = normal.clone().cross(right).normalize();
+      const matrix = new THREE.Matrix4().makeBasis(right, correctedUp, normal);
+      return new THREE.Quaternion().setFromRotationMatrix(matrix);
+    }
+
+    function canonicalUpForWorldFace(worldNormal) {
+      const n = worldNormal.clone().round();
+
+      // Side faces read upright relative to the screen/world vertical.
+      if (Math.abs(n.y) < 0.5) return new THREE.Vector3(0, 1, 0);
+
+      // Top and bottom need their own stable "up" direction.
+      return n.y > 0
+        ? new THREE.Vector3(0, 0, -1)
+        : new THREE.Vector3(0, 0, 1);
+    }
+
+    function orientSticker(cubie, sticker) {
+      const localNormal = sticker.userData.localNormal.clone();
+      const worldNormal = localNormal.clone().applyQuaternion(cubie.quaternion).round();
+      const desiredWorldUp = canonicalUpForWorldFace(worldNormal);
+
+      const inverseCubieRotation = cubie.quaternion.clone().invert();
+      const desiredLocalUp = desiredWorldUp.clone()
+        .applyQuaternion(inverseCubieRotation)
+        .normalize();
+
+      sticker.quaternion.copy(makeBasisQuaternion(localNormal, desiredLocalUp));
+    }
+
+    function orientStickers(cubie) {
+      cubie.userData.stickers.forEach(sticker => orientSticker(cubie, sticker));
+    }
+
+    function createSticker(cubie, normal, color) {
+      const geometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
+      const material = new THREE.MeshBasicMaterial({
+        map: createLetterTexture(color, randomLetter()),
+        side: THREE.FrontSide
+      });
+
+      const sticker = new THREE.Mesh(geometry, material);
+      sticker.position.copy(normal).multiplyScalar(STICKER_OFFSET);
+      sticker.userData.localNormal = normal.clone();
+
+      cubie.add(sticker);
+      cubie.userData.stickers.push(sticker);
+      orientSticker(cubie, sticker);
     }
 
     function createCubie(x, y, z) {
       const geometry = new THREE.BoxGeometry(SIZE, SIZE, SIZE);
-      const materials = [
-        faceMaterial(x ===  1 ? COLOR.right  : COLOR.inside),
-        faceMaterial(x === -1 ? COLOR.left   : COLOR.inside),
-        faceMaterial(y ===  1 ? COLOR.top    : COLOR.inside),
-        faceMaterial(y === -1 ? COLOR.bottom : COLOR.inside),
-        faceMaterial(z ===  1 ? COLOR.front  : COLOR.inside),
-        faceMaterial(z === -1 ? COLOR.back   : COLOR.inside)
-      ];
+      const bodyMaterial = material(COLOR.inside);
+      const mesh = new THREE.Mesh(geometry, bodyMaterial);
 
-      const mesh = new THREE.Mesh(geometry, materials);
       mesh.position.set(x * STEP, y * STEP, z * STEP);
       mesh.userData.home = { x, y, z };
       mesh.userData.grid = new THREE.Vector3(x, y, z);
+      mesh.userData.stickers = [];
 
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(geometry),
@@ -150,6 +216,20 @@
 
       cubeRoot.add(mesh);
       cubies.push(mesh);
+
+      for (const face of FACE_DIRECTIONS) {
+        const { normal, color } = face;
+        const isVisible =
+          (normal.x ===  1 && x ===  1) ||
+          (normal.x === -1 && x === -1) ||
+          (normal.y ===  1 && y ===  1) ||
+          (normal.y === -1 && y === -1) ||
+          (normal.z ===  1 && z ===  1) ||
+          (normal.z === -1 && z === -1);
+
+        if (isVisible) createSticker(mesh, normal, color);
+      }
+
       return mesh;
     }
 
@@ -219,18 +299,23 @@
 
     function snapOrientation(mesh) {
       mesh.updateMatrix();
-      const m = new THREE.Matrix4().makeRotationFromQuaternion(mesh.quaternion);
-      const e = m.elements;
-      for (const i of [0,1,2,4,5,6,8,9,10]) {
-        e[i] = Math.abs(e[i]) < 0.5 ? 0 : Math.sign(e[i]);
+      const matrix = new THREE.Matrix4().makeRotationFromQuaternion(mesh.quaternion);
+      const elements = matrix.elements;
+
+      for (const index of [0,1,2,4,5,6,8,9,10]) {
+        elements[index] = Math.abs(elements[index]) < 0.5
+          ? 0
+          : Math.sign(elements[index]);
       }
-      mesh.quaternion.setFromRotationMatrix(m).normalize();
+
+      mesh.quaternion.setFromRotationMatrix(matrix).normalize();
     }
 
     function attachSlice(axis, layer) {
       const selected = cubies.filter(cubie =>
         Math.round(component(cubie.userData.grid, axisIndex(axis))) === layer
       );
+
       selected.forEach(cubie => pivot.attach(cubie));
       return selected;
     }
@@ -240,7 +325,9 @@
         cubeRoot.attach(cubie);
         roundGridPosition(cubie);
         snapOrientation(cubie);
+        orientStickers(cubie);
       });
+
       pivot.quaternion.identity();
       pivot.rotation.set(0, 0, 0);
     }
@@ -250,6 +337,7 @@
 
     renderer.domElement.addEventListener('pointerdown', event => {
       if (busy) return;
+
       renderer.domElement.setPointerCapture(event.pointerId);
       const hit = firstCubeHit(event);
 
@@ -265,12 +353,10 @@
       }
 
       const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-      const faceNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
-      faceNormal.set(
-        Math.round(faceNormal.x),
-        Math.round(faceNormal.y),
-        Math.round(faceNormal.z)
-      ).normalize();
+      const faceNormal = hit.face.normal.clone()
+        .applyMatrix3(normalMatrix)
+        .normalize()
+        .round();
 
       gesture = {
         type: 'slice-pending',
@@ -279,7 +365,6 @@
         faceNormal,
         cubie: hit.object,
         axis: null,
-        axisVec: null,
         selected: null,
         angle: 0
       };
@@ -287,6 +372,7 @@
 
     renderer.domElement.addEventListener('pointermove', event => {
       if (!gesture || busy) return;
+
       const dx = event.clientX - gesture.startX;
       const dy = event.clientY - gesture.startY;
 
@@ -305,15 +391,24 @@
         const tangentAxes = [0, 1, 2].filter(index => index !== normalAxis);
 
         let best = null;
+
         for (const tangentIndex of tangentAxes) {
           const tangent = canonicalAxis(tangentIndex);
           const screen = projectAxisToScreen(tangent);
           const score = Math.abs(screen.dot(drag.clone().normalize()));
-          if (!best || score > best.score) best = { tangent, screen, score };
+
+          if (!best || score > best.score) {
+            best = { tangent, screen, score };
+          }
         }
 
-        const rotationAxis = gesture.faceNormal.clone().cross(best.tangent).normalize();
-        const layer = Math.round(component(gesture.cubie.userData.grid, axisIndex(rotationAxis)));
+        const rotationAxis = gesture.faceNormal.clone()
+          .cross(best.tangent)
+          .normalize();
+
+        const layer = Math.round(
+          component(gesture.cubie.userData.grid, axisIndex(rotationAxis))
+        );
 
         gesture.type = 'slice';
         gesture.axis = rotationAxis;
@@ -327,11 +422,13 @@
         -Math.PI * 0.62,
         Math.PI * 0.62
       );
+
       pivot.quaternion.setFromAxisAngle(gesture.axis, gesture.angle);
     });
 
     function animateSlice(targetAngle, selected, axis, startAngle) {
       busy = true;
+
       const duration = 150;
       const start = performance.now();
 
@@ -339,6 +436,7 @@
         const t = Math.min(1, (now - start) / duration);
         const eased = 1 - Math.pow(1 - t, 3);
         const angle = THREE.MathUtils.lerp(startAngle, targetAngle, eased);
+
         pivot.quaternion.setFromAxisAngle(axis, angle);
 
         if (t < 1) {
@@ -348,6 +446,7 @@
           busy = false;
         }
       }
+
       requestAnimationFrame(frame);
     }
 
@@ -358,6 +457,7 @@
         const target = Math.abs(gesture.angle) < 0.22
           ? 0
           : Math.sign(gesture.angle) * Math.PI / 2;
+
         animateSlice(target, gesture.selected, gesture.axis, gesture.angle);
       }
 
@@ -377,29 +477,37 @@
     function applyQuarterTurn(axisIndexValue, layer, direction) {
       const axis = canonicalAxis(axisIndexValue);
       const selected = attachSlice(axis, layer);
+
       pivot.quaternion.setFromAxisAngle(axis, direction * Math.PI / 2);
       detachSlice(selected);
     }
 
     document.getElementById('scramble').addEventListener('click', () => {
       if (busy) return;
+
       for (let i = 0; i < 24; i++) {
         const axis = Math.floor(Math.random() * 3);
         const layer = Math.floor(Math.random() * 3) - 1;
         const direction = Math.random() < 0.5 ? -1 : 1;
+
         applyQuarterTurn(axis, layer, direction);
       }
     });
 
     document.getElementById('reset').addEventListener('click', () => {
       if (busy) return;
+
       cubies.forEach(cubie => {
         cubeRoot.attach(cubie);
+
         const { x, y, z } = cubie.userData.home;
         cubie.position.set(x * STEP, y * STEP, z * STEP);
         cubie.quaternion.identity();
         cubie.userData.grid.set(x, y, z);
+
+        orientStickers(cubie);
       });
+
       pivot.quaternion.identity();
       pivot.rotation.set(0, 0, 0);
     });
