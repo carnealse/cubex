@@ -91,6 +91,61 @@
       color: #72f5b1;
       font-size: 12px;
     }
+    .vendor-panel {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 4;
+      width: 250px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(20,23,30,.9);
+      backdrop-filter: blur(10px);
+    }
+    .vendor-title {
+      color: #f7f8fb;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .vendor-meta {
+      margin-top: 4px;
+      color: #aeb8c9;
+      font-size: 12px;
+    }
+    .vendor-row {
+      display: grid;
+      grid-template-columns: 1fr 30px 32px 30px;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .vendor-item {
+      color: #e6eaf0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .vendor-cost {
+      color: #9faabc;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .vendor-qty {
+      text-align: center;
+      color: #f7f8fb;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .vendor-panel button {
+      padding: 5px 8px;
+      min-width: 30px;
+    }
+    .vendor-buy {
+      width: 100%;
+      margin-top: 12px;
+      padding: 8px 10px !important;
+    }
     .controls {
       position: fixed;
       bottom: 20px;
@@ -128,6 +183,24 @@
     <div id="scoreLast" class="score-last"></div>
     <div class="score-label" style="margin-top:10px;">Banked</div>
     <div id="bankedValue" class="score-value">0</div>
+  </div>
+
+  <div class="vendor-panel">
+    <div class="vendor-title">Vendor</div>
+    <div class="vendor-meta">Blank spaces: <span id="blankCount">0</span></div>
+    <div class="vendor-row">
+      <div class="vendor-item">Consonants <span class="vendor-cost">1 pt each</span></div>
+      <button id="consonantMinus" aria-label="Remove consonant">−</button>
+      <div id="consonantQty" class="vendor-qty">0</div>
+      <button id="consonantPlus" aria-label="Add consonant">+</button>
+    </div>
+    <div class="vendor-row">
+      <div class="vendor-item">Vowels <span class="vendor-cost">2 pts each</span></div>
+      <button id="vowelMinus" aria-label="Remove vowel">−</button>
+      <div id="vowelQty" class="vendor-qty">0</div>
+      <button id="vowelPlus" aria-label="Add vowel">+</button>
+    </div>
+    <button id="vendorBuy" class="vendor-buy">Buy Letters</button>
   </div>
 
   <div class="controls">
@@ -200,9 +273,14 @@
     const scoreValue = document.getElementById('scoreValue');
     const scoreLast = document.getElementById('scoreLast');
     const bankedValue = document.getElementById('bankedValue');
+    const blankCount = document.getElementById('blankCount');
+    const consonantQty = document.getElementById('consonantQty');
+    const vowelQty = document.getElementById('vowelQty');
 
     let totalScore = 0;
     let bankedScore = 0;
+    let pendingConsonants = 0;
+    let pendingVowels = 0;
 
     const LETTER_VALUES = {
       A: 1, E: 1, I: 1, L: 1, N: 1, O: 1, R: 1, S: 1, T: 1, U: 1,
@@ -215,12 +293,15 @@
     };
 
     function lengthMultiplier(length) {
-      if (length <= 3) return 1;
-      if (length === 4) return 1.25;
-      if (length === 5) return 1.5;
-      if (length === 6) return 1.8;
-      if (length === 7) return 2.2;
-      return 2.5 + ((length - 8) * 0.25);
+      if (length <= 4) return 1;
+      if (length === 5) return 1.25;
+      if (length === 6) return 1.75;
+      if (length === 7) return 2.5;
+      if (length === 8) return 3.5;
+      if (length === 9) return 5;
+      if (length === 10) return 7;
+      if (length === 11) return 9.5;
+      return 12;
     }
 
     function calculateWordScore(word) {
@@ -229,7 +310,13 @@
         0
       );
 
-      return Math.round(baseScore * lengthMultiplier(word.length));
+      const multiplier = lengthMultiplier(word.length);
+
+      return {
+        baseScore,
+        multiplier,
+        points: Math.round(baseScore * multiplier)
+      };
     }
 
     function updateScoreDisplay(points = null) {
@@ -237,6 +324,71 @@
       bankedValue.textContent = bankedScore.toLocaleString();
       scoreLast.textContent = points === null ? '' : `+${points} points`;
       document.getElementById('cashOut').disabled = totalScore === 0;
+      updateVendorDisplay();
+    }
+
+    function blankStickers() {
+      return stickers.filter(sticker => sticker.userData.used);
+    }
+
+    function vendorSelectionCount() {
+      return pendingConsonants + pendingVowels;
+    }
+
+    function vendorSelectionCost() {
+      return pendingConsonants + (pendingVowels * 2);
+    }
+
+    function resetVendorSelection() {
+      pendingConsonants = 0;
+      pendingVowels = 0;
+      updateVendorDisplay();
+    }
+
+    function updateVendorDisplay() {
+      const blanks = blankStickers().length;
+      const selected = vendorSelectionCount();
+      const cost = vendorSelectionCost();
+
+      blankCount.textContent = blanks.toLocaleString();
+      consonantQty.textContent = pendingConsonants.toLocaleString();
+      vowelQty.textContent = pendingVowels.toLocaleString();
+
+      document.getElementById('consonantMinus').disabled = pendingConsonants === 0;
+      document.getElementById('vowelMinus').disabled = pendingVowels === 0;
+      document.getElementById('consonantPlus').disabled = selected >= blanks;
+      document.getElementById('vowelPlus').disabled = selected >= blanks;
+
+      const buyButton = document.getElementById('vendorBuy');
+      buyButton.disabled =
+        selected === 0 ||
+        selected > blanks ||
+        cost > bankedScore;
+
+      buyButton.textContent = selected === 0
+        ? 'Buy Letters'
+        : `Buy Letters · ${cost} pts`;
+    }
+
+    function randomVowel() {
+      return weightedRandomLetter(VOWEL_COUNTS);
+    }
+
+    function randomConsonant() {
+      return weightedRandomLetter(CONSONANT_WEIGHTS);
+    }
+
+    function chooseRandomBlank(blanks) {
+      const index = Math.floor(Math.random() * blanks.length);
+      return blanks.splice(index, 1)[0];
+    }
+
+    function fillBlankSticker(sticker, letter) {
+      sticker.userData.letter = letter;
+      sticker.userData.selected = false;
+      sticker.userData.used = false;
+      sticker.visible = true;
+      refreshStickerTexture(sticker);
     }
 
     function setStatus(message) {
@@ -251,16 +403,75 @@
       });
     }
 
+    const VOWEL_COUNTS = {
+      A: 4,
+      E: 6,
+      I: 4,
+      O: 4,
+      U: 3
+    };
+
+    const CONSONANT_WEIGHTS = {
+      B: 1.49, C: 2.78, D: 4.25, F: 2.23, G: 2.02,
+      H: 6.09, J: 0.15, K: 0.77, L: 4.03, M: 2.41,
+      N: 6.75, P: 1.93, Q: 0.10, R: 5.99, S: 6.33,
+      T: 9.06, V: 0.98, W: 2.36, X: 0.15, Y: 1.97,
+      Z: 0.07
+    };
+
+    let roundLetterPool = [];
+
+    function shuffle(array) {
+      for (let index = array.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [array[index], array[swapIndex]] = [array[swapIndex], array[index]];
+      }
+
+      return array;
+    }
+
+    function weightedRandomLetter(weights) {
+      const entries = Object.entries(weights);
+      const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+      let roll = Math.random() * totalWeight;
+
+      for (const [letter, weight] of entries) {
+        roll -= weight;
+        if (roll <= 0) return letter;
+      }
+
+      return entries[entries.length - 1][0];
+    }
+
+    function buildBalancedLetterPool() {
+      const pool = [];
+
+      // 21 vowels out of 54 tiles: approximately 38.9%.
+      // The distribution guarantees useful vowel variety every round.
+      for (const [letter, count] of Object.entries(VOWEL_COUNTS)) {
+        for (let index = 0; index < count; index++) pool.push(letter);
+      }
+
+      // Fill the remaining 33 tiles with frequency-weighted consonants.
+      while (pool.length < 54) {
+        pool.push(weightedRandomLetter(CONSONANT_WEIGHTS));
+      }
+
+      return shuffle(pool);
+    }
+
     function randomLetter() {
-      return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      if (roundLetterPool.length === 0) {
+        roundLetterPool = buildBalancedLetterPool();
+      }
+
+      return roundLetterPool.pop();
     }
 
     function textColorForBackground(color) {
-      const r = (color >> 16) & 255;
-      const g = (color >> 8) & 255;
-      const b = color & 255;
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      return luminance > 0.62 ? '#111318' : '#f8f9fc';
+      // Level 1 uses light face colors, so every letter stays black.
+      // Later levels can swap this back to contrast-aware coloring.
+      return '#111318';
     }
 
     function createLetterTexture(color, letter, selected = false) {
@@ -290,14 +501,38 @@
       return texture;
     }
 
+    function createUsedStickerTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Leave the face transparent and only draw a faint ghost outline
+      // so removed letters do not become a giant black void.
+      ctx.clearRect(0, 0, 256, 256);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(24, 24, 208, 208);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return texture;
+    }
+
     function refreshStickerTexture(sticker) {
       if (!sticker.material) return;
       if (sticker.material.map) sticker.material.map.dispose();
-      sticker.material.map = createLetterTexture(
-        sticker.userData.color,
-        sticker.userData.letter,
-        sticker.userData.selected
-      );
+
+      sticker.material.map = sticker.userData.used
+        ? createUsedStickerTexture()
+        : createLetterTexture(
+            sticker.userData.color,
+            sticker.userData.letter,
+            sticker.userData.selected
+          );
+
+      sticker.material.opacity = sticker.userData.used ? 0.9 : 1;
       sticker.material.needsUpdate = true;
     }
 
@@ -417,7 +652,10 @@
 
     function firstStickerHit(event) {
       setRay(event);
-      return raycaster.intersectObjects(stickers.filter(sticker => sticker.visible), false)[0] ?? null;
+      return raycaster.intersectObjects(
+        stickers.filter(sticker => sticker.visible && !sticker.userData.used),
+        false
+      )[0] ?? null;
     }
 
     function firstCubeHit(event) {
@@ -793,19 +1031,57 @@
         return;
       }
 
-      const points = calculateWordScore(word);
-      totalScore += points;
+      const score = calculateWordScore(word);
+      totalScore += score.points;
 
       selectedStickers.splice(0).forEach(sticker => {
         sticker.userData.selected = false;
         sticker.userData.used = true;
-        sticker.visible = false;
+        sticker.visible = true;
+        refreshStickerTexture(sticker);
       });
 
       updateWordDisplay();
-      updateScoreDisplay(points);
-      setStatus(`Accepted: ${word.toUpperCase()} · +${points} points`);
+      updateScoreDisplay(score.points);
+      updateVendorDisplay();
+
+      const multiplierText = score.multiplier === 1
+        ? ''
+        : ` · ${score.multiplier}× length multiplier`;
+
+      setStatus(
+        `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} points`
+      );
     });
+
+    function startFreshRound() {
+      clearSelection('Starting a fresh cube.');
+      roundLetterPool = buildBalancedLetterPool();
+      pendingConsonants = 0;
+      pendingVowels = 0;
+
+      cubies.forEach(cubie => {
+        cubeRoot.attach(cubie);
+
+        const { x, y, z } = cubie.userData.home;
+        cubie.position.set(x * STEP, y * STEP, z * STEP);
+        cubie.quaternion.identity();
+        cubie.userData.grid.set(x, y, z);
+
+        orientStickers(cubie);
+      });
+
+      stickers.forEach(sticker => {
+        sticker.userData.letter = randomLetter();
+        sticker.userData.selected = false;
+        sticker.userData.used = false;
+        sticker.visible = true;
+        refreshStickerTexture(sticker);
+      });
+
+      pivot.quaternion.identity();
+      pivot.rotation.set(0, 0, 0);
+    }
 
     document.getElementById('cashOut').addEventListener('click', () => {
       if (busy || totalScore === 0) return;
@@ -814,8 +1090,72 @@
       bankedScore += totalScore;
       totalScore = 0;
 
+      startFreshRound();
       updateScoreDisplay();
-      setStatus(`Cashed out ${cashedOut.toLocaleString()} points.`);
+      setStatus(
+        `Cashed out ${cashedOut.toLocaleString()} points. Fresh cube loaded.`
+      );
+    });
+
+    document.getElementById('consonantPlus').addEventListener('click', () => {
+      if (vendorSelectionCount() >= blankStickers().length) return;
+      pendingConsonants += 1;
+      updateVendorDisplay();
+    });
+
+    document.getElementById('consonantMinus').addEventListener('click', () => {
+      if (pendingConsonants === 0) return;
+      pendingConsonants -= 1;
+      updateVendorDisplay();
+    });
+
+    document.getElementById('vowelPlus').addEventListener('click', () => {
+      if (vendorSelectionCount() >= blankStickers().length) return;
+      pendingVowels += 1;
+      updateVendorDisplay();
+    });
+
+    document.getElementById('vowelMinus').addEventListener('click', () => {
+      if (pendingVowels === 0) return;
+      pendingVowels -= 1;
+      updateVendorDisplay();
+    });
+
+    document.getElementById('vendorBuy').addEventListener('click', () => {
+      if (busy) return;
+
+      const blanks = blankStickers();
+      const count = vendorSelectionCount();
+      const cost = vendorSelectionCost();
+
+      if (count === 0) return;
+
+      if (count > blanks.length) {
+        setStatus('There are not enough blank spaces for that purchase.');
+        updateVendorDisplay();
+        return;
+      }
+
+      if (cost > bankedScore) {
+        setStatus('Not enough banked points for that purchase.');
+        updateVendorDisplay();
+        return;
+      }
+
+      bankedScore -= cost;
+
+      for (let index = 0; index < pendingConsonants; index++) {
+        fillBlankSticker(chooseRandomBlank(blanks), randomConsonant());
+      }
+
+      for (let index = 0; index < pendingVowels; index++) {
+        fillBlankSticker(chooseRandomBlank(blanks), randomVowel());
+      }
+
+      const purchased = count;
+      resetVendorSelection();
+      updateScoreDisplay();
+      setStatus(`Vendor purchase complete: ${purchased} letter${purchased === 1 ? '' : 's'} added.`);
     });
 
     document.getElementById('clear').addEventListener('click', () => {
@@ -847,6 +1187,7 @@
 
     updateWordDisplay();
     updateScoreDisplay();
+    updateVendorDisplay();
     updateCamera();
     animate();
   </script>
