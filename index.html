@@ -86,15 +86,55 @@
       });
     }
 
+    function randomLetter() {
+      return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+    }
+
+    function textColorForBackground(color) {
+      const r = (color >> 16) & 255;
+      const g = (color >> 8) & 255;
+      const b = color & 255;
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.62 ? '#111318' : '#f8f9fc';
+    }
+
+    function materialWithLetter(color, letter) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+      ctx.fillRect(0, 0, 128, 128);
+      ctx.fillStyle = textColorForBackground(color);
+      ctx.font = 'bold 76px Inter, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, 64, 66);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+
+      return new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 0.42,
+        metalness: 0.02
+      });
+    }
+
+    function faceMaterial(color) {
+      if (color === COLOR.inside) return material(color);
+      return materialWithLetter(color, randomLetter());
+    }
+
     function createCubie(x, y, z) {
       const geometry = new THREE.BoxGeometry(SIZE, SIZE, SIZE);
       const materials = [
-        material(x ===  1 ? COLOR.right  : COLOR.inside),
-        material(x === -1 ? COLOR.left   : COLOR.inside),
-        material(y ===  1 ? COLOR.top    : COLOR.inside),
-        material(y === -1 ? COLOR.bottom : COLOR.inside),
-        material(z ===  1 ? COLOR.front  : COLOR.inside),
-        material(z === -1 ? COLOR.back   : COLOR.inside)
+        faceMaterial(x ===  1 ? COLOR.right  : COLOR.inside),
+        faceMaterial(x === -1 ? COLOR.left   : COLOR.inside),
+        faceMaterial(y ===  1 ? COLOR.top    : COLOR.inside),
+        faceMaterial(y === -1 ? COLOR.bottom : COLOR.inside),
+        faceMaterial(z ===  1 ? COLOR.front  : COLOR.inside),
+        faceMaterial(z === -1 ? COLOR.back   : COLOR.inside)
       ];
 
       const mesh = new THREE.Mesh(geometry, materials);
