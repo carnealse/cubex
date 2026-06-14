@@ -1522,7 +1522,7 @@
     function randomRoundRecapSnark(grade, netProfit) {
       if (grade === 'S+') return 'A disgusting little masterpiece. The cube hates how competent that looked.';
       if (grade === 'S') return 'Excellent work. Suspiciously excellent. Compliance has opened a file.';
-      if (grade === 'A') return 'Main contract complete. You converted effort into SlopCoin, which is almost a life skill if you squint hard enough.';
+      if (grade === 'A') return 'Main and bonus complete. Strong work. Very responsible. Very beige. The cube withholds applause for artistic reasons.';
       if (grade === 'F') return 'The main contract failed. The round did not end. It was taken behind the cube and handled by Legal.';
       if (grade === 'D') return 'You escaped through the shame chute. The cube respects your honesty and despises your work ethic.';
       if (netProfit < 0) return 'You lost SlopCoin this round. Bold strategy. The vendor is naming a boat after you.';
@@ -1971,20 +1971,29 @@
       if (isMissionFailed(currentMainMission)) return 'F';
       if (!mainComplete) return 'D';
 
-      const impressiveFeats = [
+      const seriousFeats = [
         roundStats.validWords >= 8,
-        roundStats.tilesCleared >= 28,
+        roundStats.tilesCleared >= 30,
         roundStats.scoreEarned >= 150,
         roundStats.longestWord >= 7,
-        roundStats.rareLettersUsed > 0,
-        roundStats.edgeWords > 0,
-        roundStats.threeFaceWords > 0,
+        roundStats.rareLettersUsed >= 2,
+        roundStats.edgeWords >= 4,
+        roundStats.threeFaceWords >= 2,
         roundStats.facesCleared > 0,
-        roundStats.invalidWords === 0 && roundStats.validWords >= 5
+        roundStats.invalidWords === 0 && roundStats.validWords >= 7
       ].filter(Boolean).length;
 
-      if (bonusComplete && (roundStats.facesCleared > 0 || impressiveFeats >= 2)) return 'S+';
-      if (bonusComplete && impressiveFeats >= 1) return 'S';
+      const monsterFeats = [
+        roundStats.validWords >= 10,
+        roundStats.tilesCleared >= 40,
+        roundStats.scoreEarned >= 250,
+        roundStats.longestWord >= 8,
+        roundStats.facesCleared > 0,
+        roundStats.threeFaceWords >= 3
+      ].filter(Boolean).length;
+
+      if (bonusComplete && (monsterFeats >= 1 || seriousFeats >= 3)) return 'S+';
+      if (bonusComplete && seriousFeats >= 1) return 'S';
       if (bonusComplete) return 'A';
       if (roundStats.validWords >= 5 || roundStats.tilesCleared >= 18 || roundStats.scoreEarned >= 100) return 'B';
       return 'C';
