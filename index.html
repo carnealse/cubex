@@ -59,6 +59,48 @@
       color: #b9c3d4;
       font-size: 12px;
     }
+    .mission-panel {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 4;
+      width: min(340px, calc(100vw - 36px));
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(20,23,30,.88);
+      backdrop-filter: blur(10px);
+    }
+    .mission-kicker {
+      color: #9ba5b7;
+      font-size: 11px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+    .mission-name {
+      margin-top: 3px;
+      color: #f7f8fb;
+      font-size: 15px;
+      font-weight: 900;
+    }
+    .mission-flavor {
+      margin-top: 3px;
+      color: #aeb8c9;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+    .mission-progress {
+      margin-top: 6px;
+      color: #72f5b1;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .mission-bonus {
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(255,255,255,.1);
+    }
     .score-panel {
       position: fixed;
       top: 18px;
@@ -179,6 +221,58 @@
       font-size: 18px;
       line-height: 1;
     }
+    .celebration-modal {
+      text-align: center;
+    }
+    .celebration-title {
+      color: #72f5b1;
+      font-size: 30px;
+      font-weight: 1000;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin: 4px 0 10px;
+    }
+    .celebration-body {
+      color: #e6eaf0;
+      font-size: 15px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    .celebration-body p {
+      margin: 10px 0;
+    }
+    .celebration-button {
+      margin-top: 14px;
+      padding: 10px 14px !important;
+      width: 100%;
+    }
+    .confetti-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .confetti-piece {
+      position: absolute;
+      top: -16px;
+      width: 9px;
+      height: 14px;
+      border-radius: 2px;
+      animation-name: confetti-fall;
+      animation-timing-function: cubic-bezier(.18,.72,.35,1);
+      animation-fill-mode: forwards;
+    }
+    @keyframes confetti-fall {
+      0% {
+        transform: translate3d(0, -20px, 0) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(var(--drift), calc(100vh + 40px), 0) rotate(var(--spin));
+        opacity: 0;
+      }
+    }
     .vendor-meta {
       margin-top: 4px;
       color: #aeb8c9;
@@ -281,11 +375,25 @@
     <div id="status" class="status">Click adjacent letters to build a word.</div>
   </div>
 
+  <div class="mission-panel">
+    <div class="mission-kicker">Main Contract</div>
+    <div id="mainMissionName" class="mission-name"></div>
+    <div id="mainMissionFlavor" class="mission-flavor"></div>
+    <div id="mainMissionProgress" class="mission-progress"></div>
+
+    <div class="mission-bonus">
+      <div class="mission-kicker">Bonus Contract</div>
+      <div id="bonusMissionName" class="mission-name"></div>
+      <div id="bonusMissionFlavor" class="mission-flavor"></div>
+      <div id="bonusMissionProgress" class="mission-progress"></div>
+    </div>
+  </div>
+
   <div class="score-panel">
-    <div class="score-label">Current Score</div>
+    <div class="score-label">Current SlopCoin</div>
     <div id="scoreValue" class="score-value">0</div>
     <div id="scoreLast" class="score-last"></div>
-    <div class="score-label" style="margin-top:10px;">Banked</div>
+    <div class="score-label" style="margin-top:10px;">Banked SlopCoin</div>
     <div id="bankedValue" class="score-value">0</div>
 
     <div id="rankTitle" class="rank-title">Rank 1 · Cube Intern</div>
@@ -307,13 +415,13 @@
 
       <div class="vendor-meta">Blank spaces: <span id="blankCount">0</span></div>
       <div class="vendor-row">
-        <div class="vendor-item">Consonants <span class="vendor-cost">1 pt each</span></div>
+        <div class="vendor-item">Consonants <span class="vendor-cost">1 SlopCoin each</span></div>
         <button id="consonantMinus" aria-label="Remove consonant">−</button>
         <div id="consonantQty" class="vendor-qty">0</div>
         <button id="consonantPlus" aria-label="Add consonant">+</button>
       </div>
       <div class="vendor-row">
-        <div class="vendor-item">Vowels <span class="vendor-cost">2 pts each</span></div>
+        <div class="vendor-item">Vowels <span class="vendor-cost">2 SlopCoin each</span></div>
         <button id="vowelMinus" aria-label="Remove vowel">−</button>
         <div id="vowelQty" class="vendor-qty">0</div>
         <button id="vowelPlus" aria-label="Add vowel">+</button>
@@ -333,9 +441,28 @@
     </div>
   </div>
 
+  <div id="firstCashoutModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="firstCashoutTitle">
+      <div class="modal-header">
+        <div id="firstCashoutTitle" class="modal-title">New Achievement: Questionable Wealth</div>
+        <button class="modal-close" data-close-modal aria-label="Close celebration">×</button>
+      </div>
+
+      <div class="celebration-title">CONGRATULATIONS!</div>
+      <div class="celebration-body">
+        <p>You just earned your first SlopCoins!</p>
+        <p>It may have a greasy texture and smell like a moist paper bag on the floor of a truck stop, but it's money. And now you have some!</p>
+        <p>It can be used to purchase items from the vendor that may help you, or may just be a grift. Only one way to find out.</p>
+      </div>
+      <button class="celebration-button" data-close-modal>Accept My Financial Mistake</button>
+    </div>
+  </div>
+
+  <div id="confettiLayer" class="confetti-layer"></div>
+
   <div class="controls">
     <button id="submit">Submit</button>
-    <button id="cashOut">Cash Out</button>
+    <button id="cashOut" title="Locked until the main contract is complete. SlopCoin is fake, but standards are somehow real.">Cash Out</button>
     <button id="clear">Clear</button>
     <button id="scramble">Scramble</button>
   </div>
@@ -400,6 +527,12 @@
 
     const wordValue = document.getElementById('wordValue');
     const status = document.getElementById('status');
+    const mainMissionName = document.getElementById('mainMissionName');
+    const mainMissionFlavor = document.getElementById('mainMissionFlavor');
+    const mainMissionProgress = document.getElementById('mainMissionProgress');
+    const bonusMissionName = document.getElementById('bonusMissionName');
+    const bonusMissionFlavor = document.getElementById('bonusMissionFlavor');
+    const bonusMissionProgress = document.getElementById('bonusMissionProgress');
     const scoreValue = document.getElementById('scoreValue');
     const scoreLast = document.getElementById('scoreLast');
     const bankedValue = document.getElementById('bankedValue');
@@ -412,6 +545,8 @@
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
     const inventoryModal = document.getElementById('inventoryModal');
+    const firstCashoutModal = document.getElementById('firstCashoutModal');
+    const confettiLayer = document.getElementById('confettiLayer');
 
     const SAVE_KEY = 'cubex-save-v1';
 
@@ -455,9 +590,13 @@
     let bankedScore = 0;
     let totalXP = 0;
     let rank = 1;
+    let hasSeenFirstCashout = false;
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
+    let currentMainMission = null;
+    let currentBonusMission = null;
+    let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
 
@@ -501,8 +640,14 @@
     function updateScoreDisplay(points = null) {
       scoreValue.textContent = totalScore.toLocaleString();
       bankedValue.textContent = bankedScore.toLocaleString();
-      scoreLast.textContent = points === null ? '' : `+${points} points`;
-      document.getElementById('cashOut').disabled = totalScore === 0;
+      scoreLast.textContent = points === null ? '' : `+${points} SlopCoin`;
+
+      const mainComplete = currentMainMission
+        ? isMissionComplete(currentMainMission)
+        : false;
+
+      document.getElementById('cashOut').disabled = totalScore === 0 || !mainComplete;
+
       updateRankDisplay();
       updateVendorDisplay();
       updateInventoryDisplay();
@@ -513,6 +658,8 @@
       vendorModal.setAttribute('aria-hidden', 'true');
       inventoryModal.classList.remove('open');
       inventoryModal.setAttribute('aria-hidden', 'true');
+      firstCashoutModal.classList.remove('open');
+      firstCashoutModal.setAttribute('aria-hidden', 'true');
     }
 
     function openMenu(menuName) {
@@ -529,6 +676,417 @@
         inventoryModal.classList.add('open');
         inventoryModal.setAttribute('aria-hidden', 'false');
       }
+    }
+
+    function emptyRoundStats() {
+      return {
+        validWords: 0,
+        invalidWords: 0,
+        tilesCleared: 0,
+        scoreEarned: 0,
+        longestWord: 0,
+        rareLettersUsed: 0,
+        edgeWords: 0,
+        diagonalWords: 0,
+        threeFaceWords: 0,
+        vendorLettersUsed: 0,
+        swappyUsed: 0,
+        facesCleared: 0,
+        cleanWords: 0
+      };
+    }
+
+    function rankTier() {
+      if (rank <= 3) return 1;
+      if (rank <= 7) return 2;
+      if (rank <= 12) return 3;
+      if (rank <= 20) return 4;
+      return 5;
+    }
+
+    function missionProgressValue(mission) {
+      if (!mission || !roundStats) return 0;
+
+      if (mission.stat === 'cleanWords') {
+        return roundStats.invalidWords === 0 ? roundStats.validWords : 0;
+      }
+
+      return roundStats[mission.stat] || 0;
+    }
+
+    function isMissionComplete(mission) {
+      return missionProgressValue(mission) >= mission.target;
+    }
+
+    function missionProgressText(mission) {
+      const current = Math.min(missionProgressValue(mission), mission.target);
+      return `${current.toLocaleString()} / ${mission.target.toLocaleString()}${mission.unit || ''}`;
+    }
+
+    function scaledTarget(base, perRank, max = Infinity) {
+      return Math.min(max, base + Math.floor(rank * perRank));
+    }
+
+    function createMissionPool(kind = 'main') {
+      const tier = rankTier();
+      const main = [
+        {
+          id: 'valid_words',
+          stat: 'validWords',
+          name: 'Mouth Noises Required',
+          target: scaledTarget(3, 0.35, 14),
+          unit: ' words',
+          rewardXP: 90 + rank * 12,
+          flavor: 'Submit valid words until the cube stops pretending it has dignity.'
+        },
+        {
+          id: 'clear_tiles',
+          stat: 'tilesCleared',
+          name: 'Alphabet Harvest',
+          target: scaledTarget(10, 1.5, 42),
+          unit: ' tiles',
+          rewardXP: 110 + rank * 14,
+          flavor: 'The cube grew letters. You brought a lawnmower.'
+        },
+        {
+          id: 'round_score',
+          stat: 'scoreEarned',
+          name: 'Profit Goblin',
+          target: scaledTarget(80, 11, 450),
+          unit: ' points',
+          rewardXP: 100 + rank * 13,
+          flavor: 'Extract value from the cube like a tiny venture capitalist with no soul.'
+        },
+        {
+          id: 'long_word',
+          stat: 'longestWord',
+          name: 'Big Word Energy',
+          target: Math.min(12, 5 + Math.floor(rank / 4)),
+          unit: ' letters',
+          rewardXP: 120 + rank * 16,
+          flavor: 'Make one word long enough to need a parking permit.'
+        },
+        {
+          id: 'diagonal_words',
+          stat: 'diagonalWords',
+          name: 'Diagonal Goblinry',
+          target: Math.min(8, 1 + Math.floor(rank / 4)),
+          unit: ' words',
+          rewardXP: 100 + rank * 14,
+          flavor: 'Walk sideways through spelling like geometry owes you rent.'
+        },
+        {
+          id: 'edge_words',
+          stat: 'edgeWords',
+          name: 'Edge Crimes',
+          target: Math.min(8, 1 + Math.floor(rank / 4)),
+          unit: ' words',
+          rewardXP: 115 + rank * 15,
+          flavor: 'Cross cube edges because flat surfaces are for quitters.'
+        }
+      ];
+
+      if (tier >= 2) {
+        main.push(
+          {
+            id: 'three_face_words',
+            stat: 'threeFaceWords',
+            name: 'Corner Gremlin',
+            target: Math.min(5, 1 + Math.floor(rank / 6)),
+            unit: ' words',
+            rewardXP: 135 + rank * 17,
+            flavor: 'Use three faces in one word. This is what happens when a dictionary eats a Rubik’s Cube.'
+          },
+          {
+            id: 'rare_letters',
+            stat: 'rareLettersUsed',
+            name: 'Alphabet Felony',
+            target: Math.min(5, 1 + Math.floor(rank / 7)),
+            unit: ' rare letters',
+            rewardXP: 140 + rank * 18,
+            flavor: 'Deploy Q, X, Z, or J. The alphabet’s little war criminals need work.'
+          }
+        );
+      }
+
+      if (tier >= 3) {
+        main.push(
+          {
+            id: 'vendor_letters',
+            stat: 'vendorLettersUsed',
+            name: 'Questionable Commerce',
+            target: Math.min(8, 1 + Math.floor(rank / 5)),
+            unit: ' vendor tiles',
+            rewardXP: 145 + rank * 18,
+            flavor: 'Use letters bought from the vendor. Capitalism has entered the cube.'
+          },
+          {
+            id: 'face_clear',
+            stat: 'facesCleared',
+            name: 'Blacked Out',
+            target: 1,
+            unit: ' face',
+            rewardXP: 225 + rank * 20,
+            flavor: 'Erase an entire face like it said something brave online.'
+          }
+        );
+      }
+
+      if (tier >= 4) {
+        main.push(
+          {
+            id: 'clean_words',
+            stat: 'cleanWords',
+            name: 'No Take Backs',
+            target: Math.min(10, 4 + Math.floor(rank / 4)),
+            unit: ' clean words',
+            rewardXP: 175 + rank * 20,
+            flavor: 'Submit valid words with no invalid junk. Weirdly competent. Suspicious.'
+          },
+          {
+            id: 'swappy_use',
+            stat: 'swappyUsed',
+            name: 'Candy-Based Logistics',
+            target: Math.min(4, 1 + Math.floor(rank / 8)),
+            unit: ' swaps',
+            rewardXP: 160 + rank * 18,
+            flavor: 'Eat suspicious candy. Rearrange reality. Pretend this is normal.'
+          }
+        );
+      }
+
+      const bonus = [
+        {
+          id: 'bonus_no_invalid',
+          stat: 'cleanWords',
+          name: 'Polite Little Monster',
+          target: Math.min(8, 2 + Math.floor(rank / 5)),
+          unit: ' clean words',
+          rewardXP: 65 + rank * 8,
+          flavor: 'Make words without insulting the dictionary with keyboard vomit.'
+        },
+        {
+          id: 'bonus_five_words',
+          stat: 'validWords',
+          name: 'Five Finger Discount',
+          target: Math.min(10, 5 + Math.floor(rank / 6)),
+          unit: ' words',
+          rewardXP: 70 + rank * 8,
+          flavor: 'Steal five words from the cube and act like it was skill.'
+        },
+        {
+          id: 'bonus_rare',
+          stat: 'rareLettersUsed',
+          name: 'Rare Breed',
+          target: Math.min(3, 1 + Math.floor(rank / 10)),
+          unit: ' rare letters',
+          rewardXP: 80 + rank * 10,
+          flavor: 'Find the alphabet’s problem children and put them to work.'
+        },
+        {
+          id: 'bonus_long',
+          stat: 'longestWord',
+          name: 'Long Little Freak',
+          target: Math.min(12, 5 + Math.floor(rank / 5)),
+          unit: ' letters',
+          rewardXP: 75 + rank * 9,
+          flavor: 'Build a word that looks like it needs a zoning permit.'
+        },
+        {
+          id: 'bonus_tiles',
+          stat: 'tilesCleared',
+          name: 'Tile Gobbler',
+          target: scaledTarget(8, 1.1, 32),
+          unit: ' tiles',
+          rewardXP: 70 + rank * 9,
+          flavor: 'Consume letters like a raccoon in a Scrabble factory.'
+        },
+        {
+          id: 'bonus_edge',
+          stat: 'edgeWords',
+          name: 'Geometry Restraining Order',
+          target: Math.min(5, 1 + Math.floor(rank / 6)),
+          unit: ' edge words',
+          rewardXP: 85 + rank * 10,
+          flavor: 'The cube had boundaries. You ignored them like a gifted menace.'
+        }
+      ];
+
+      if (tier >= 3) {
+        bonus.push(
+          {
+            id: 'bonus_vendor',
+            stat: 'vendorLettersUsed',
+            name: 'Coupon Goblin',
+            target: Math.min(5, 1 + Math.floor(rank / 7)),
+            unit: ' vendor tiles',
+            rewardXP: 90 + rank * 10,
+            flavor: 'Buy letters and pretend it is not a tiny back-alley alphabet deal.'
+          },
+          {
+            id: 'bonus_face',
+            stat: 'facesCleared',
+            name: 'Paint Removal Specialist',
+            target: 1,
+            unit: ' face',
+            rewardXP: 125 + rank * 12,
+            flavor: 'A face had color. You fixed that emotional problem.'
+          }
+        );
+      }
+
+      return kind === 'bonus' ? bonus : main;
+    }
+
+    function pickRandomMission(kind = 'main', avoidId = null) {
+      const pool = createMissionPool(kind).filter(mission => mission.id !== avoidId);
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    function startNewMissions() {
+      roundStats = emptyRoundStats();
+      currentMainMission = pickRandomMission('main');
+      currentBonusMission = pickRandomMission('bonus', currentMainMission.id);
+      updateMissionDisplay();
+    }
+
+    function updateMissionDisplay() {
+      if (!currentMainMission || !currentBonusMission) return;
+
+      mainMissionName.textContent = currentMainMission.name;
+      mainMissionFlavor.textContent = currentMainMission.flavor;
+      mainMissionProgress.textContent =
+        `${missionProgressText(currentMainMission)}${isMissionComplete(currentMainMission) ? ' · COMPLETE' : ''}`;
+
+      bonusMissionName.textContent = currentBonusMission.name;
+      bonusMissionFlavor.textContent = currentBonusMission.flavor;
+      bonusMissionProgress.textContent =
+        `${missionProgressText(currentBonusMission)}${isMissionComplete(currentBonusMission) ? ' · COMPLETE' : ''}`;
+
+      const cashOutButton = document.getElementById('cashOut');
+      if (cashOutButton) {
+        cashOutButton.disabled =
+          totalScore === 0 ||
+          !isMissionComplete(currentMainMission);
+      }
+    }
+
+    function faceKeyFromNormal(normal) {
+      const n = normal.clone().round();
+      if (n.x === 1) return 'right';
+      if (n.x === -1) return 'left';
+      if (n.y === 1) return 'top';
+      if (n.y === -1) return 'bottom';
+      if (n.z === 1) return 'front';
+      return 'back';
+    }
+
+    function clearedFaceCount() {
+      const faces = { right: [], left: [], top: [], bottom: [], front: [], back: [] };
+
+      stickers.forEach(sticker => {
+        const key = faceKeyFromNormal(worldNormalForSticker(sticker));
+        faces[key].push(sticker);
+      });
+
+      return Object.values(faces).filter(faceStickers =>
+        faceStickers.length === 9 && faceStickers.every(sticker => sticker.userData.used)
+      ).length;
+    }
+
+    function analyzeSubmittedPath(pathStickers) {
+      let usedDiagonal = false;
+      let crossedEdge = false;
+      const facesUsed = new Set();
+
+      pathStickers.forEach(sticker => {
+        facesUsed.add(faceKeyFromNormal(worldNormalForSticker(sticker)));
+      });
+
+      for (let index = 1; index < pathStickers.length; index++) {
+        const a = pathStickers[index - 1];
+        const b = pathStickers[index];
+
+        const na = worldNormalForSticker(a);
+        const nb = worldNormalForSticker(b);
+        const ga = a.userData.cubie.userData.grid;
+        const gb = b.userData.cubie.userData.grid;
+
+        if (na.dot(nb) > 0.5) {
+          const faceAxis = nonZeroAxis(na);
+          const axes = [0, 1, 2].filter(axis => axis !== faceAxis);
+          const d1 = Math.abs(vectorComponent(ga, axes[0]) - vectorComponent(gb, axes[0]));
+          const d2 = Math.abs(vectorComponent(ga, axes[1]) - vectorComponent(gb, axes[1]));
+          if (d1 === 1 && d2 === 1) usedDiagonal = true;
+        } else {
+          crossedEdge = true;
+        }
+      }
+
+      return {
+        usedDiagonal,
+        crossedEdge,
+        usedThreeFaces: facesUsed.size >= 3
+      };
+    }
+
+    function updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore) {
+      const analysis = analyzeSubmittedPath(submittedPath);
+      const facesAfter = clearedFaceCount();
+      const newlyClearedFaces = Math.max(0, facesAfter - facesBefore);
+
+      roundStats.validWords += 1;
+      roundStats.cleanWords = roundStats.invalidWords === 0 ? roundStats.validWords : 0;
+      roundStats.tilesCleared += submittedPath.length;
+      roundStats.scoreEarned += score.points;
+      roundStats.longestWord = Math.max(roundStats.longestWord, word.length);
+      roundStats.rareLettersUsed += [...word.toUpperCase()].filter(letter => 'QXZJ'.includes(letter)).length;
+      roundStats.vendorLettersUsed += submittedPath.filter(sticker => sticker.userData.source === 'vendor').length;
+      roundStats.facesCleared += newlyClearedFaces;
+
+      if (analysis.usedDiagonal) roundStats.diagonalWords += 1;
+      if (analysis.crossedEdge) roundStats.edgeWords += 1;
+      if (analysis.usedThreeFaces) roundStats.threeFaceWords += 1;
+
+      updateMissionDisplay();
+    }
+
+    function gradeRound(mainComplete, bonusComplete) {
+      if (mainComplete && bonusComplete && roundStats.facesCleared > 0) return 'S+';
+      if (mainComplete && bonusComplete) return 'S';
+      if (mainComplete) return 'A';
+      if (roundStats.validWords >= 5 || roundStats.tilesCleared >= 18) return 'B';
+      if (roundStats.validWords >= 3) return 'C';
+      return 'D';
+    }
+
+    function launchConfetti() {
+      confettiLayer.innerHTML = '';
+      const colors = ['#72f5b1', '#f0d520', '#f28c28', '#d62929', '#f4f4f4', '#275dd6'];
+      const count = 120;
+
+      for (let index = 0; index < count; index++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = `${Math.random() * 100}%`;
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDuration = `${1.8 + Math.random() * 1.9}s`;
+        piece.style.animationDelay = `${Math.random() * 0.3}s`;
+        piece.style.setProperty('--drift', `${(Math.random() - 0.5) * 260}px`);
+        piece.style.setProperty('--spin', `${(Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 720)}deg`);
+        confettiLayer.appendChild(piece);
+      }
+
+      setTimeout(() => {
+        confettiLayer.innerHTML = '';
+      }, 4300);
+    }
+
+    function showFirstCashoutCelebration() {
+      closeMenus();
+      firstCashoutModal.classList.add('open');
+      firstCashoutModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
     }
 
     function normalizeInventory(value) {
@@ -637,6 +1195,8 @@
       swapStickerLetters(activeSwapFirstSticker, sticker);
       setSelected(activeSwapFirstSticker, false);
 
+      roundStats.swappyUsed += 1;
+      updateMissionDisplay();
       removeInventoryItem('swappyPop', 1);
       deactivateInventoryItem('Swappy Pop consumed. Two letters swapped. Deliciously suspicious.');
       return true;
@@ -692,6 +1252,7 @@
         bankedScore,
         totalXP,
         rank,
+        hasSeenFirstCashout,
         inventory: normalizeInventory(inventory)
       };
 
@@ -707,6 +1268,7 @@
         bankedScore = Number(save.bankedScore) || 0;
         totalXP = Number(save.totalXP) || 0;
         rank = rankFromXP(totalXP);
+        hasSeenFirstCashout = Boolean(save.hasSeenFirstCashout);
         inventory = normalizeInventory(save.inventory);
       } catch {
         bankedScore = 0;
@@ -790,7 +1352,7 @@
 
       buyButton.textContent = selected === 0
         ? 'Buy Letters'
-        : `Buy Letters · ${cost} pts`;
+        : `Buy Letters · ${cost} SlopCoin`;
     }
 
     function randomVowel() {
@@ -806,8 +1368,9 @@
       return blanks.splice(index, 1)[0];
     }
 
-    function fillBlankSticker(sticker, letter) {
+    function fillBlankSticker(sticker, letter, source = 'vendor') {
       sticker.userData.letter = letter;
+      sticker.userData.source = source;
       sticker.userData.selected = false;
       sticker.userData.used = false;
       sticker.visible = true;
@@ -1008,6 +1571,7 @@
       sticker.userData.letter = letter;
       sticker.userData.selected = false;
       sticker.userData.used = false;
+      sticker.userData.source = 'random';
       sticker.userData.cubie = cubie;
 
       cubie.add(sticker);
@@ -1490,11 +2054,16 @@
       const word = currentWord().toLowerCase();
 
       if (!ALLOWED_WORDS.has(word)) {
+        roundStats.invalidWords += 1;
+        roundStats.cleanWords = 0;
+        updateMissionDisplay();
         clearSelection(`"${word.toUpperCase()}" is not in the allowed word list.`);
         return;
       }
 
       const score = calculateWordScore(word);
+      const submittedPath = [...selectedStickers];
+      const facesBefore = clearedFaceCount();
       totalScore += score.points;
 
       selectedStickers.splice(0).forEach(sticker => {
@@ -1504,6 +2073,7 @@
         refreshStickerTexture(sticker);
       });
 
+      updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore);
       updateWordDisplay();
       updateScoreDisplay(score.points);
       updateVendorDisplay();
@@ -1518,7 +2088,7 @@
         : '';
 
       setStatus(
-        `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} points · +${score.points} XP${rankText}`
+        `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} SlopCoin · +${score.points} XP${rankText}`
       );
     });
 
@@ -1543,27 +2113,67 @@
         sticker.userData.letter = randomLetter();
         sticker.userData.selected = false;
         sticker.userData.used = false;
+        sticker.userData.source = 'random';
         sticker.visible = true;
         refreshStickerTexture(sticker);
       });
 
       pivot.quaternion.identity();
       pivot.rotation.set(0, 0, 0);
+      startNewMissions();
     }
 
     document.getElementById('cashOut').addEventListener('click', () => {
       if (busy || totalScore === 0) return;
 
+      const mainComplete = isMissionComplete(currentMainMission);
+
+      if (!mainComplete) {
+        setStatus('Cash Out denied. Finish the main contract first. This is not a DAO, you still have to do something.');
+        updateScoreDisplay();
+        return;
+      }
+
       const cashedOut = totalScore;
+      const bonusComplete = isMissionComplete(currentBonusMission);
+      const grade = gradeRound(mainComplete, bonusComplete);
+
+      let missionXP = 0;
+      let rewardText = '';
+
+      if (mainComplete) {
+        missionXP += currentMainMission.rewardXP;
+        rewardText += ` Main complete: +${currentMainMission.rewardXP} XP.`;
+      }
+
+      if (bonusComplete) {
+        missionXP += currentBonusMission.rewardXP;
+        rewardText += ` Bonus complete: +${currentBonusMission.rewardXP} XP.`;
+      }
+
+      if (grade === 'S' || grade === 'S+') {
+        addInventoryItem('swappyPop', grade === 'S+' ? 2 : 1);
+        rewardText += ` ${grade === 'S+' ? '+2' : '+1'} Swappy Pop reward.`;
+      }
+
+      if (missionXP > 0) addXP(missionXP);
+
       bankedScore += totalScore;
       totalScore = 0;
+
+      const shouldCelebrateFirstCashout = !hasSeenFirstCashout && bankedScore > 0;
+      if (shouldCelebrateFirstCashout) hasSeenFirstCashout = true;
 
       startFreshRound();
       saveGame();
       updateScoreDisplay();
       setStatus(
-        `Cashed out ${cashedOut.toLocaleString()} points. Fresh cube loaded.`
+        `Cashed out ${cashedOut.toLocaleString()} SlopCoin. Grade ${grade}.${rewardText || ' Main contract complete, bonus ignored you back. Fresh cube loaded.'}`
       );
+
+      if (shouldCelebrateFirstCashout) {
+        showFirstCashoutCelebration();
+      }
     });
 
     document.getElementById('consonantPlus').addEventListener('click', () => {
@@ -1606,7 +2216,7 @@
       }
 
       if (cost > bankedScore) {
-        setStatus('Not enough banked points for that purchase.');
+        setStatus('Not enough SlopCoin. The vendor laughs in blockchain.');
         updateVendorDisplay();
         return;
       }
@@ -1625,7 +2235,7 @@
       resetVendorSelection();
       saveGame();
       updateScoreDisplay();
-      setStatus(`Vendor purchase complete: ${purchased} letter${purchased === 1 ? '' : 's'} added.`);
+      setStatus(`Vendor transaction complete: ${purchased} letter${purchased === 1 ? '' : 's'} added.`);
     });
 
     document.getElementById('clear').addEventListener('click', () => {
@@ -1656,6 +2266,7 @@
     }
 
     loadGame();
+    startNewMissions();
     updateWordDisplay();
     updateScoreDisplay();
     updateVendorDisplay();
