@@ -179,6 +179,16 @@
       font-size: 12px;
       font-weight: 800;
       backdrop-filter: blur(10px);
+      cursor: pointer;
+      user-select: none;
+    }
+    .game-hint:hover {
+      background: rgba(255,255,255,.09);
+      border-color: rgba(114,245,177,.32);
+      color: #f7f8fb;
+    }
+    .game-hint:active {
+      transform: translateY(1px);
     }
     .active-item-hud {
       position: fixed;
@@ -298,6 +308,92 @@
       margin-top: 5px;
       color: #b9c3d4;
       font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .achievement-popup-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .achievement-tier {
+      color: #b9c3d4;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .achievement-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      line-height: 1;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,.2), rgba(255,255,255,0) 40%),
+        linear-gradient(145deg, hsla(var(--achievement-hue, 160), 75%, 58%, .34), rgba(255,255,255,.06));
+      border: 1px solid hsla(var(--achievement-hue, 160), 80%, 72%, .42);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 12px 28px rgba(0,0,0,.28);
+      text-shadow: 0 1px 10px rgba(0,0,0,.35);
+    }
+    .achievement-reward {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(114,245,177,.18);
+      background: rgba(114,245,177,.08);
+      color: #d9ffe9;
+      font-size: 13px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    .achievement-journal-item {
+      display: grid;
+      grid-template-columns: 60px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .achievement-journal-item .achievement-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      font-size: 24px;
+    }
+    .achievement-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .achievement-name {
+      color: #f7f8fb;
+      font-weight: 900;
+      font-size: 15px;
+    }
+    .achievement-meta {
+      color: #72f5b1;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .achievement-progress {
+      margin-top: 8px;
+      color: #c7d1df;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .achievement-reward-line {
+      margin-top: 6px;
+      color: #8cf7c1;
+      font-size: 12px;
+      font-weight: 700;
       line-height: 1.4;
     }
     .modal-backdrop {
@@ -676,9 +772,9 @@
   </div>
 
   <div class="game-hints">
-    <div class="game-hint">I · Inventory</div>
-    <div class="game-hint">V · Vendor</div>
-    <div class="game-hint">J · Journal</div>
+    <div class="game-hint" data-open-menu="inventory">I · Inventory</div>
+    <div class="game-hint" data-open-menu="vendor">V · Vendor</div>
+    <div class="game-hint" data-open-menu="journal">J · Journal</div>
   </div>
 
   <div id="vendorModal" class="modal-backdrop" aria-hidden="true">
@@ -742,6 +838,28 @@
       <div id="journalItems" class="journal-section"></div>
       <div id="journalHints" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
+    </div>
+  </div>
+
+
+  <div id="achievementModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="achievementTitle">
+      <div class="modal-header">
+        <div id="achievementTitle" class="modal-title">Achievement Unlocked</div>
+        <button class="modal-close" data-close-modal aria-label="Close achievement">×</button>
+      </div>
+
+      <div class="achievement-popup-header">
+        <div id="achievementIcon" class="achievement-icon">🏆</div>
+        <div id="achievementTier" class="achievement-tier"></div>
+      </div>
+
+      <div id="achievementName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="achievementDescription"></p>
+      </div>
+      <div id="achievementReward" class="achievement-reward"></div>
+      <button class="celebration-button" data-close-modal>File This In Your Permanent Record</button>
     </div>
   </div>
 
@@ -969,6 +1087,12 @@
     const journalItems = document.getElementById('journalItems');
     const journalHints = document.getElementById('journalHints');
     const journalAchievements = document.getElementById('journalAchievements');
+    const achievementModal = document.getElementById('achievementModal');
+    const achievementIcon = document.getElementById('achievementIcon');
+    const achievementTier = document.getElementById('achievementTier');
+    const achievementName = document.getElementById('achievementName');
+    const achievementDescription = document.getElementById('achievementDescription');
+    const achievementReward = document.getElementById('achievementReward');
     const roundRecapModal = document.getElementById('roundRecapModal');
     const hintUnlockModal = document.getElementById('hintUnlockModal');
     const hintUnlockName = document.getElementById('hintUnlockName');
@@ -1081,6 +1205,7 @@
     let pendingSwappyPopCelebration = false;
     let pendingItemUnlockCelebrations = [];
     let pendingHintUnlockCelebrations = [];
+    let pendingAchievementCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -1159,6 +1284,8 @@
       inventoryModal.setAttribute('aria-hidden', 'true');
       journalModal.classList.remove('open');
       journalModal.setAttribute('aria-hidden', 'true');
+      achievementModal.classList.remove('open');
+      achievementModal.setAttribute('aria-hidden', 'true');
       roundRecapModal.classList.remove('open');
       roundRecapModal.setAttribute('aria-hidden', 'true');
       hintUnlockModal.classList.remove('open');
@@ -1329,36 +1456,491 @@
 
     const ACHIEVEMENT_DEFINITIONS = [
       {
-        id: 'first_cashout',
-        name: 'Questionable Wealth',
-        description: 'Earn your first SlopCoins and immediately become part of the problem.',
-        unlocked: () => hasSeenFirstCashout
+        id: 'first_slop',
+        name: 'First Slop',
+        icon: '💰',
+        iconHue: 145,
+        tier: 'Common',
+        description: 'You earned your first SlopCoins. They have the texture of a humid receipt and the dignity of a failed meme token, but they are yours now.',
+        requirementText: 'Cash out for the first time.',
+        rewardLabel: '10 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 10 }],
+        unlocked: () => lifetimeStats.totalCashouts >= 1,
+        progress: () => [lifetimeStats.totalCashouts, 1]
       },
       {
-        id: 'first_swappy',
-        name: 'Van Candy Enthusiast',
-        description: 'Receive your first Swappy Pop and somehow survive the transaction.',
-        unlocked: () => hasSeenFirstSwappyPop
+        id: 'tiny_garbage_capitalist',
+        name: 'Tiny Garbage Capitalist',
+        icon: '🐀',
+        iconHue: 35,
+        tier: 'Common',
+        description: 'You banked 100 lifetime SlopCoin. Somewhere, a tiny venture capitalist in a stained polo is clapping with damp little hands.',
+        requirementText: 'Bank 100 lifetime SlopCoin.',
+        rewardLabel: '25 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 25 }],
+        unlocked: () => lifetimeStats.lifetimeSlopCoinBanked >= 100,
+        progress: () => [lifetimeStats.lifetimeSlopCoinBanked, 100]
       },
       {
-        id: 'hundred_slop',
-        name: 'Tiny Slop Baron',
-        description: 'Earn 100 lifetime SlopCoin. Your empire is disgusting, but technically measurable.',
-        unlocked: () => lifetimeStats.lifetimeSlopCoinEarned >= 100
+        id: 'mouth_noises',
+        name: 'Mouth Noises',
+        icon: '👄',
+        iconHue: 348,
+        tier: 'Common',
+        description: 'You submitted 25 real words. Look at you, weaponizing literacy instead of just making throat sounds at a glowing cube.',
+        requirementText: 'Submit 25 valid words.',
+        rewardLabel: '20 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 20 }],
+        unlocked: () => lifetimeStats.validWordsSubmitted >= 25,
+        progress: () => [lifetimeStats.validWordsSubmitted, 25]
       },
       {
-        id: 'invalid_ten',
-        name: 'Dictionary Criminal',
-        description: 'Submit 10 illegal nonsense words. The cube noticed. The cube told everyone.',
-        unlocked: () => lifetimeStats.invalidWordsSubmitted >= 10
+        id: 'word_gremlin',
+        name: 'Word Gremlin',
+        icon: '👹',
+        iconHue: 280,
+        tier: 'Uncommon',
+        description: 'You submitted 100 valid words. At this point you are less a player and more an alphabet raccoon rummaging through language for shiny scraps.',
+        requirementText: 'Submit 100 valid words.',
+        rewardLabel: '1 Swappy Pop',
+        rewards: [{ type: 'item', itemKey: 'swappyPop', count: 1 }],
+        unlocked: () => lifetimeStats.validWordsSubmitted >= 100,
+        progress: () => [lifetimeStats.validWordsSubmitted, 100]
       },
       {
-        id: 'rank_five',
-        name: 'Middle Management Gremlin',
-        description: 'Reach Rank 5. You now have authority over nothing and vibes over everyone.',
-        unlocked: () => rank >= 5
+        id: 'long_little_freak',
+        name: 'Long Little Freak',
+        icon: '📏',
+        iconHue: 205,
+        tier: 'Uncommon',
+        description: 'You made a 7-letter word. That is no longer a word, that is a tax form wearing pants.',
+        requirementText: 'Submit a 7-letter word.',
+        rewardLabel: '1 Multiplier Mint',
+        rewards: [{ type: 'item', itemKey: 'multiplierMint', count: 1 }],
+        unlocked: () => lifetimeStats.longestWord >= 7,
+        progress: () => [lifetimeStats.longestWord, 7]
+      },
+      {
+        id: 'dictionary_felon',
+        name: 'Dictionary Felon',
+        icon: '📕',
+        iconHue: 8,
+        tier: 'Deeply Unnecessary',
+        description: 'You submitted 10 illegal nonsense words. The dictionary has requested a restraining order and several emotional support bookmarks.',
+        requirementText: 'Submit 10 illegal words.',
+        rewardLabel: '5 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 5 }],
+        unlocked: () => lifetimeStats.invalidWordsSubmitted >= 10,
+        progress: () => [lifetimeStats.invalidWordsSubmitted, 10]
+      },
+      {
+        id: 'keyboard_roadkill',
+        name: 'Keyboard Roadkill',
+        icon: '💥',
+        iconHue: 12,
+        tier: 'Deeply Unnecessary',
+        description: 'Twenty-five illegal words later, what you are doing can no longer be called spelling. It is debris.',
+        requirementText: 'Submit 25 illegal words.',
+        rewardLabel: '10 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 10 }],
+        unlocked: () => lifetimeStats.invalidWordsSubmitted >= 25,
+        progress: () => [lifetimeStats.invalidWordsSubmitted, 25]
+      },
+      {
+        id: 'disappointment_ointment',
+        name: 'Disappointment Ointment',
+        icon: '🧴',
+        iconHue: 210,
+        tier: 'Deeply Unnecessary',
+        description: 'You abandoned a round. Reward: nothing. Quitters are lucky we are not charging a disposal fee for the emotional residue.',
+        requirementText: 'Abandon 1 round.',
+        rewardLabel: 'Nothing',
+        rewards: [],
+        unlocked: () => lifetimeStats.abandonedRounds >= 1,
+        progress: () => [lifetimeStats.abandonedRounds, 1]
+      },
+      {
+        id: 'shame_chute_regular',
+        name: 'Shame Chute Regular',
+        icon: '🗑️',
+        iconHue: 24,
+        tier: 'Common',
+        description: 'You abandoned 10 rounds. You now qualify for the platinum loyalty tier in the Department of Tactical Surrender.',
+        requirementText: 'Abandon 10 rounds.',
+        rewardLabel: '10 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 10 }],
+        unlocked: () => lifetimeStats.abandonedRounds >= 10,
+        progress: () => [lifetimeStats.abandonedRounds, 10]
+      },
+      {
+        id: 'f_stands_for_financially_unwell',
+        name: 'F Stands For Financially Unwell',
+        icon: '📉',
+        iconHue: 355,
+        tier: 'Deeply Unnecessary',
+        description: 'You failed a main contract. You did not leave the round. The round left you, took the furniture, and kept the deposit.',
+        requirementText: 'Fail 1 main contract.',
+        rewardLabel: 'Nothing',
+        rewards: [],
+        unlocked: () => lifetimeStats.mainContractsFailed >= 1,
+        progress: () => [lifetimeStats.mainContractsFailed, 1]
+      },
+      {
+        id: 'beige_excellence',
+        name: 'Beige Excellence',
+        icon: '🏅',
+        iconHue: 50,
+        tier: 'Rare',
+        description: 'You earned 10 A grades. Dependable, efficient, and just bland enough to survive a performance review.',
+        requirementText: 'Earn 10 A grades.',
+        rewardLabel: '1 Vowel Voucher',
+        rewards: [{ type: 'item', itemKey: 'vowelVoucher', count: 1 }],
+        unlocked: () => (lifetimeStats.gradeCounts.A || 0) >= 10,
+        progress: () => [lifetimeStats.gradeCounts.A || 0, 10]
+      },
+      {
+        id: 'suspiciously_competent',
+        name: 'Suspiciously Competent',
+        icon: '👀',
+        iconHue: 180,
+        tier: 'Epic',
+        description: 'Five S grades means you are doing a little too well for someone being paid in damp joke money.',
+        requirementText: 'Earn 5 S grades.',
+        rewardLabel: 'Title: Suspiciously Competent',
+        rewards: [{ type: 'title', name: 'Suspiciously Competent' }],
+        unlocked: () => (lifetimeStats.gradeCounts.S || 0) >= 5,
+        progress: () => [lifetimeStats.gradeCounts.S || 0, 5]
+      },
+      {
+        id: 'workplace_injury_report',
+        name: 'Workplace Injury Report',
+        icon: '⚠️',
+        iconHue: 55,
+        tier: 'Legendary',
+        description: 'Three S+ grades. The cube has contacted HR, Legal, and a priest trained in occupational hauntings.',
+        requirementText: 'Earn 3 S+ grades.',
+        rewardLabel: 'Cube Skin: Compliance Hazard',
+        rewards: [{ type: 'skin', name: 'Compliance Hazard' }],
+        unlocked: () => (lifetimeStats.gradeCounts['S+'] || 0) >= 3,
+        progress: () => [lifetimeStats.gradeCounts['S+'] || 0, 3]
+      },
+      {
+        id: 'van_candy_sampler',
+        name: 'Van Candy Sampler',
+        icon: '🍭',
+        iconHue: 315,
+        tier: 'Common',
+        description: 'You used a Swappy Pop. Congratulations on consuming mystery candy from a logistics system that definitely has no safety inspector.',
+        requirementText: 'Use Swappy Pop once.',
+        rewardLabel: '10 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 10 }],
+        unlocked: () => (lifetimeStats.itemsUsed.swappyPop || 0) >= 1,
+        progress: () => [lifetimeStats.itemsUsed.swappyPop || 0, 1]
+      },
+      {
+        id: 'coupon_goblin',
+        name: 'Coupon Goblin',
+        icon: '🎟️',
+        iconHue: 140,
+        tier: 'Uncommon',
+        description: 'You used 10 vouchers and coupons. You have become the exact sort of creature that hoards circulars and attacks Sunday inserts on sight.',
+        requirementText: 'Use 10 vouchers or coupons.',
+        rewardLabel: '1 Consonant Coupon',
+        rewards: [{ type: 'item', itemKey: 'consonantCoupon', count: 1 }],
+        unlocked: () => ((lifetimeStats.itemsUsed.vowelVoucher || 0) + (lifetimeStats.itemsUsed.consonantCoupon || 0)) >= 10,
+        progress: () => [((lifetimeStats.itemsUsed.vowelVoucher || 0) + (lifetimeStats.itemsUsed.consonantCoupon || 0)), 10]
+      },
+      {
+        id: 'hope_is_a_paid_feature',
+        name: 'Hope Is A Paid Feature',
+        icon: '🔮',
+        iconHue: 270,
+        tier: 'Deeply Unnecessary',
+        description: 'You bought Hope Detector. You could have trusted your instincts, but instead you subscribed to monetized optimism.',
+        requirementText: 'Buy Hope Detector once.',
+        rewardLabel: 'Nothing',
+        rewards: [],
+        unlocked: () => (lifetimeStats.hintPurchaseCounts.hopeDetector || 0) >= 1,
+        progress: () => [lifetimeStats.hintPurchaseCounts.hopeDetector || 0, 1]
+      },
+      {
+        id: 'executive_function_sold_separately',
+        name: 'Executive Function Sold Separately',
+        icon: '👔',
+        iconHue: 200,
+        tier: 'Epic',
+        description: 'You purchased the Executive Cheating Package. The vendor respects your commitment to efficiency and moral softness.',
+        requirementText: 'Buy Executive Cheating Package once.',
+        rewardLabel: 'Title: Executive Cheater',
+        rewards: [{ type: 'title', name: 'Executive Cheater' }],
+        unlocked: () => (lifetimeStats.hintPurchaseCounts.executiveCheat || 0) >= 1,
+        progress: () => [lifetimeStats.hintPurchaseCounts.executiveCheat || 0, 1]
+      },
+      {
+        id: 'scrambled_eggs',
+        name: 'Scrambled Eggs',
+        icon: '🥚',
+        iconHue: 52,
+        tier: 'Deeply Unnecessary',
+        description: 'You used Scramble 12 times. The cube is dizzy, your cholesterol feels symbolic, and nobody learned anything.',
+        requirementText: 'Use Scramble 12 times.',
+        rewardLabel: 'Nothing',
+        rewards: [],
+        unlocked: () => lifetimeStats.scrambleCount >= 12,
+        progress: () => [lifetimeStats.scrambleCount, 12]
+      },
+      {
+        id: 'shake_weight_for_letters',
+        name: 'Shake Weight For Letters',
+        icon: '🏋️',
+        iconHue: 8,
+        tier: 'Uncommon',
+        description: 'Fifty scrambles later, you are no longer randomizing the cube. You are just aggressively babysitting geometry.',
+        requirementText: 'Use Scramble 50 times.',
+        rewardLabel: '25 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 25 }],
+        unlocked: () => lifetimeStats.scrambleCount >= 50,
+        progress: () => [lifetimeStats.scrambleCount, 50]
+      },
+      {
+        id: 'alphabet_felony',
+        name: 'Alphabet Felony',
+        icon: '🔤',
+        iconHue: 178,
+        tier: 'Common',
+        description: 'You used a rare letter. One of the alphabet’s little problem children finally found employment.',
+        requirementText: 'Use 1 rare letter.',
+        rewardLabel: '10 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 10 }],
+        unlocked: () => lifetimeStats.rareLettersUsed >= 1,
+        progress: () => [lifetimeStats.rareLettersUsed, 1]
+      },
+      {
+        id: 'problem_child_collector',
+        name: 'Problem Child Collector',
+        icon: '🧨',
+        iconHue: 14,
+        tier: 'Rare',
+        description: 'You used 25 rare letters. This is less vocabulary and more supervised release for the alphabet’s troublemakers.',
+        requirementText: 'Use 25 rare letters.',
+        rewardLabel: '1 Multiplier Mint',
+        rewards: [{ type: 'item', itemKey: 'multiplierMint', count: 1 }],
+        unlocked: () => lifetimeStats.rareLettersUsed >= 25,
+        progress: () => [lifetimeStats.rareLettersUsed, 25]
+      },
+      {
+        id: 'blackout',
+        name: 'Blackout',
+        icon: '⚫',
+        iconHue: 0,
+        tier: 'Rare',
+        description: 'You cleared an entire face. You removed all color from one side of the cube and replaced it with the color of your work-life balance.',
+        requirementText: 'Clear 1 full face.',
+        rewardLabel: '1 random unlocked item',
+        rewards: [{ type: 'randomUnlockedItem', count: 1 }],
+        unlocked: () => lifetimeStats.facesCleared >= 1,
+        progress: () => [lifetimeStats.facesCleared, 1]
+      },
+      {
+        id: 'tile_gobbler',
+        name: 'Tile Gobbler',
+        icon: '🧱',
+        iconHue: 122,
+        tier: 'Rare',
+        description: 'You cleared 1,000 tiles. At this point you are not solving a cube. You are conducting a demolition project with vowels.',
+        requirementText: 'Clear 1,000 tiles.',
+        rewardLabel: '50 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 50 }],
+        unlocked: () => lifetimeStats.tilesCleared >= 1000,
+        progress: () => [lifetimeStats.tilesCleared, 1000]
+      },
+      {
+        id: 'edge_crimes',
+        name: 'Edge Crimes',
+        icon: '📐',
+        iconHue: 230,
+        tier: 'Uncommon',
+        description: 'You made 10 edge-crossing words. Geometry suggested boundaries. You treated that suggestion with the respect it did not deserve.',
+        requirementText: 'Make 10 edge-crossing words.',
+        rewardLabel: '25 SlopCoin',
+        rewards: [{ type: 'slopcoin', amount: 25 }],
+        unlocked: () => lifetimeStats.edgeWordsMade >= 10,
+        progress: () => [lifetimeStats.edgeWordsMade, 10]
+      },
+      {
+        id: 'corner_gremlin',
+        name: 'Corner Gremlin',
+        icon: '📦',
+        iconHue: 285,
+        tier: 'Rare',
+        description: 'You made 10 three-face words. The cube is now convinced you live in its walls and crawl around at night.',
+        requirementText: 'Make 10 three-face words.',
+        rewardLabel: '1 Swappy Pop',
+        rewards: [{ type: 'item', itemKey: 'swappyPop', count: 1 }],
+        unlocked: () => lifetimeStats.threeFaceWordsMade >= 10,
+        progress: () => [lifetimeStats.threeFaceWordsMade, 10]
       }
     ];
+
+    function emptyHintCounts() {
+      return {
+        hopeDetector: 0,
+        firstLetterLeak: 0,
+        corporateNudge: 0,
+        pathSniffer: 0,
+        executiveCheat: 0
+      };
+    }
+
+    function achievementById(id) {
+      return ACHIEVEMENT_DEFINITIONS.find(achievement => achievement.id === id) || null;
+    }
+
+    function achievementUnlocked(id) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      return Boolean(lifetimeStats.achievementUnlocks[id]);
+    }
+
+    function achievementUnlockCount() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      return Object.keys(lifetimeStats.achievementUnlocks || {}).length;
+    }
+
+    function pushUnique(list, value) {
+      if (!Array.isArray(list)) return [value];
+      if (!list.includes(value)) list.push(value);
+      return list;
+    }
+
+    function rewardFallbackSnark() {
+      return 'Nothing. The reward budget was replaced with contempt and a shrug.';
+    }
+
+    function grantAchievementRewards(achievement) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      const rewards = Array.isArray(achievement.rewards) ? achievement.rewards : [];
+      if (!rewards.length) return rewardFallbackSnark();
+
+      const parts = [];
+
+      rewards.forEach(reward => {
+        if (reward.type === 'slopcoin') {
+          const amount = Number(reward.amount || 0);
+          if (amount > 0) {
+            bankedScore += amount;
+            lifetimeStats.achievementSlopCoinAwarded += amount;
+            parts.push(`${amount.toLocaleString()} SlopCoin`);
+          }
+          return;
+        }
+
+        if (reward.type === 'item') {
+          const count = Number(reward.count || 1);
+          addInventoryItem(reward.itemKey, count);
+          const itemName = INVENTORY_ITEMS[reward.itemKey]?.name || 'Mystery Item';
+          parts.push(`${count.toLocaleString()} ${itemName}${count === 1 ? '' : 's'}`);
+          return;
+        }
+
+        if (reward.type === 'randomUnlockedItem') {
+          const count = Number(reward.count || 1);
+          const randomKey = addRandomUnlockedItem(count);
+          const itemName = INVENTORY_ITEMS[randomKey]?.name || 'Random Item';
+          parts.push(`${count.toLocaleString()} random unlocked item${count === 1 ? '' : 's'} (${itemName})`);
+          return;
+        }
+
+        if (reward.type === 'title') {
+          lifetimeStats.titlesUnlocked = pushUnique(lifetimeStats.titlesUnlocked, reward.name);
+          parts.push(`Title unlocked: ${reward.name}`);
+          return;
+        }
+
+        if (reward.type === 'skin') {
+          lifetimeStats.skinsUnlocked = pushUnique(lifetimeStats.skinsUnlocked, reward.name);
+          parts.push(`Cube skin unlocked: ${reward.name}`);
+          return;
+        }
+
+        if (reward.type === 'effect') {
+          lifetimeStats.effectsUnlocked = pushUnique(lifetimeStats.effectsUnlocked, reward.name);
+          parts.push(`Sticker effect unlocked: ${reward.name}`);
+        }
+      });
+
+      return parts.join(' • ') || rewardFallbackSnark();
+    }
+
+    function queueAchievementCelebration(achievementId, rewardText) {
+      pendingAchievementCelebrations.push({
+        achievementId,
+        rewardText
+      });
+    }
+
+    function progressTextForAchievement(achievement) {
+      const progress = typeof achievement.progress === 'function'
+        ? achievement.progress()
+        : null;
+
+      if (!progress || !Array.isArray(progress)) return 'Progress unavailable. The paperwork ate it.';
+      const current = Number(progress[0] || 0);
+      const target = Number(progress[1] || 0);
+      if (target <= 0) return `Progress: ${current.toLocaleString()}`;
+      return `Progress: ${Math.min(current, target).toLocaleString()} / ${target.toLocaleString()}`;
+    }
+
+    function unlockAchievement(achievement, options = {}) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      if (achievementUnlocked(achievement.id)) return false;
+
+      lifetimeStats.achievementUnlocks[achievement.id] = {
+        unlockedAt: Date.now()
+      };
+      lifetimeStats.achievementUnlockOrder.push(achievement.id);
+
+      const rewardText = grantAchievementRewards(achievement);
+
+      if (!options.silent) {
+        queueAchievementCelebration(achievement.id, rewardText);
+      }
+
+      updateScoreDisplay();
+      updateInventoryDisplay();
+      updateJournalDisplay();
+      saveGame();
+      return true;
+    }
+
+    function checkAchievements(options = {}) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+
+      for (const achievement of ACHIEVEMENT_DEFINITIONS) {
+        if (!achievementUnlocked(achievement.id) && achievement.unlocked()) {
+          unlockAchievement(achievement, options);
+        }
+      }
+    }
+
+    function achievementIconHtml(achievement) {
+      return `<div class="achievement-icon" style="--achievement-hue:${achievement.iconHue};">${achievement.icon}</div>`;
+    }
+
+    function showAchievementCelebration(payload) {
+      const achievement = achievementById(payload.achievementId);
+      if (!achievement) return;
+
+      closeMenus();
+      achievementIcon.innerHTML = achievement.icon;
+      achievementIcon.style.setProperty('--achievement-hue', achievement.iconHue);
+      achievementTier.textContent = achievement.tier;
+      achievementName.textContent = achievement.name.toUpperCase();
+      achievementDescription.textContent = achievement.description;
+      achievementReward.innerHTML = `<strong>Reward:</strong> ${payload.rewardText}`;
+      achievementModal.classList.add('open');
+      achievementModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
 
     const ITEM_JOURNAL = INVENTORY_ITEMS;
 
@@ -1392,9 +1974,12 @@
         gradeCounts: emptyGradeCounts(),
         lifetimeSlopCoinEarned: 0,
         lifetimeSlopCoinSpent: 0,
+        lifetimeSlopCoinBanked: 0,
+        achievementSlopCoinAwarded: 0,
         lifetimeXPEarned: 0,
         hintsBought: 0,
         lifetimeHintSpend: 0,
+        hintPurchaseCounts: emptyHintCounts(),
         totalCashouts: 0,
         abandonedRounds: 0,
         contractsCompleted: 0,
@@ -1402,6 +1987,10 @@
         bonusContractsCompleted: 0,
         bonusContractsFailed: 0,
         tilesCleared: 0,
+        facesCleared: 0,
+        edgeWordsMade: 0,
+        threeFaceWordsMade: 0,
+        scrambleCount: 0,
         rareLettersUsed: 0,
         swappyPopsUsed: 0,
         vendorLettersBought: 0,
@@ -1410,6 +1999,11 @@
         itemsUsed: emptyItemCounts(),
         itemsDiscovered: emptyItemCounts(),
         hintsDiscovered: {},
+        achievementUnlocks: {},
+        achievementUnlockOrder: [],
+        titlesUnlocked: [],
+        skinsUnlocked: [],
+        effectsUnlocked: [],
         highestSingleWordScore: 0,
         longestWord: 0
       };
@@ -1424,10 +2018,16 @@
         ...incoming,
         wordLengthCounts: { ...base.wordLengthCounts, ...(incoming.wordLengthCounts || {}) },
         gradeCounts: { ...base.gradeCounts, ...(incoming.gradeCounts || {}) },
+        hintPurchaseCounts: { ...base.hintPurchaseCounts, ...(incoming.hintPurchaseCounts || {}) },
         itemsReceived: { ...base.itemsReceived, ...(incoming.itemsReceived || {}) },
         itemsUsed: { ...base.itemsUsed, ...(incoming.itemsUsed || {}) },
         itemsDiscovered: { ...base.itemsDiscovered, ...(incoming.itemsDiscovered || {}) },
-        hintsDiscovered: { ...(incoming.hintsDiscovered || {}) }
+        hintsDiscovered: { ...(incoming.hintsDiscovered || {}) },
+        achievementUnlocks: { ...(incoming.achievementUnlocks || {}) },
+        achievementUnlockOrder: Array.isArray(incoming.achievementUnlockOrder) ? [...incoming.achievementUnlockOrder] : [],
+        titlesUnlocked: Array.isArray(incoming.titlesUnlocked) ? [...incoming.titlesUnlocked] : [],
+        skinsUnlocked: Array.isArray(incoming.skinsUnlocked) ? [...incoming.skinsUnlocked] : [],
+        effectsUnlocked: Array.isArray(incoming.effectsUnlocked) ? [...incoming.effectsUnlocked] : []
       };
     }
 
@@ -1461,10 +2061,41 @@
         .map(([grade, count]) => statCard(`Grade ${grade}`, count))
         .join('');
 
+      const achievementCards = ACHIEVEMENT_DEFINITIONS.map(achievement => {
+        const unlocked = achievementUnlocked(achievement.id);
+
+        return `
+          <div class="journal-item ${unlocked ? '' : 'locked'}">
+            <div class="achievement-journal-item">
+              ${achievementIconHtml(achievement)}
+              <div>
+                <div class="achievement-topline">
+                  <div class="achievement-name">${achievement.name}</div>
+                  <div class="achievement-meta">${achievement.tier}</div>
+                </div>
+                <div class="journal-item-body">
+                  ${unlocked
+                    ? achievement.description
+                    : `${achievement.requirementText} Not earned yet. The achievement goblin remains seated with crossed arms and a clipboard.`}
+                </div>
+                <div class="achievement-reward-line"><strong>Reward:</strong> ${achievement.rewardLabel}</div>
+                <div class="achievement-progress">
+                  <strong>Requirement:</strong> ${achievement.requirementText}<br>
+                  ${unlocked ? 'Status: Unlocked. The paperwork has been filed and the shame is permanent.' : progressTextForAchievement(achievement)}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
       journalStats.innerHTML = `
         <div class="journal-grid">
           ${statCard('Lifetime SlopCoin Earned', lifetimeStats.lifetimeSlopCoinEarned, 'Gross domestic product of your personal trash economy.')}
+          ${statCard('Lifetime SlopCoin Banked', lifetimeStats.lifetimeSlopCoinBanked, 'Actually realized profit, unlike the imaginary sludge on the side panel.')}
           ${statCard('Lifetime SlopCoin Spent', lifetimeStats.lifetimeSlopCoinSpent, 'You gave it to the vendor. The vendor is not your friend.')}
+          ${statCard('Achievement SlopCoin', lifetimeStats.achievementSlopCoinAwarded, 'Bonus sludge paid out by the achievement department after a brief and clearly corrupt review.')}
+          ${statCard('Achievements Unlocked', achievementUnlockCount(), 'Your official record of literacy crimes, geometry abuse, and professional collapse.')}
           ${statCard('Hints Bought', lifetimeStats.hintsBought, 'Times you paid for hope because effort had become emotionally unavailable.')}
           ${statCard('SlopCoin Spent On Hints', lifetimeStats.lifetimeHintSpend, 'Money burned at the altar of executive convenience.')}
           ${statCard('Valid Words', lifetimeStats.validWordsSubmitted, 'Actual words. Legally impressive.')}
@@ -1472,23 +2103,29 @@
           ${statCard('Cash Outs', lifetimeStats.totalCashouts, 'Times you converted effort into SlopCoin and shame.')}
           ${statCard('Abandoned Rounds', lifetimeStats.abandonedRounds, 'Times you found the emergency exit and called it strategy.')}
           ${statCard('Contracts Completed', lifetimeStats.contractsCompleted, 'Main objectives beaten into submission.')}
-          ${statCard('Main Contracts Failed', lifetimeStats.mainContractsFailed, 'Rounds where the contract did not survive contact with your choices.')}
-          ${statCard('Bonus Contracts', lifetimeStats.bonusContractsCompleted, 'Extra credit, but make it morally damp.')}
-          ${statCard('Failed Bonus Contracts', lifetimeStats.bonusContractsFailed, 'Optional objectives you personally escorted into a ditch.')}
-          ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Letters removed from cube society.')}
-          ${statCard('Rare Letters Used', lifetimeStats.rareLettersUsed, 'Q, X, Z, and J. The alphabet problem children.')}
+          ${statCard('Main Contracts Failed', lifetimeStats.mainContractsFailed, 'Rounds where the contract did not survive contact with your management style.')}
+          ${statCard('Bonus Contracts Completed', lifetimeStats.bonusContractsCompleted, 'Optional work completed because boundaries are a myth here.')}
+          ${statCard('Bonus Contracts Failed', lifetimeStats.bonusContractsFailed, 'Optional objectives that died alone and unsupervised.')}
+          ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Every removed letter is a tiny eviction notice.')}
+          ${statCard('Faces Cleared', lifetimeStats.facesCleared, 'Entire cube faces sent directly into the void.')}
+          ${statCard('Edge-Crossing Words', lifetimeStats.edgeWordsMade, 'Words that treated geometry like a polite suggestion.')}
+          ${statCard('Three-Face Words', lifetimeStats.threeFaceWordsMade, 'The cube hates these, which is why they are beautiful.')}
+          ${statCard('Rare Letters Used', lifetimeStats.rareLettersUsed, 'Problem children like Q, X, Z, and J forced into labor.')}
+          ${statCard('Scrambles Used', lifetimeStats.scrambleCount, 'Times you shook the cube like it owed you money.')}
           ${statCard('Vendor Letters Bought', lifetimeStats.vendorLettersBought, 'Purchased from a suspicious menu with no refund policy.')}
           ${statCard('Vendor Letters Used', lifetimeStats.vendorLettersUsed, 'At least some of your bad purchases became words.')}
           ${statCard('Swappy Pops Used', lifetimeStats.swappyPopsUsed, 'Candy-assisted letter crimes.')}
           ${statCard('Longest Word', lifetimeStats.longestWord, 'Personal best letter sausage.')}
           ${statCard('Highest Word Score', lifetimeStats.highestSingleWordScore, 'Peak SlopCoin extraction event.')}
           ${statCard('Lifetime XP Earned', lifetimeStats.lifetimeXPEarned, 'Career advancement calories with no nutritional value.')}
+          ${statCard('Titles Unlocked', lifetimeStats.titlesUnlocked.length, lifetimeStats.titlesUnlocked.length ? lifetimeStats.titlesUnlocked.join(', ') : 'No titles yet. Your aura remains unbranded.')}
+          ${statCard('Cube Skins Unlocked', lifetimeStats.skinsUnlocked.length, lifetimeStats.skinsUnlocked.length ? lifetimeStats.skinsUnlocked.join(', ') : 'No skins yet. The cube remains in its company-issued shell.')}
         </div>
 
         <h3>Word Length Counts</h3>
         <div class="journal-grid">${wordLengths}</div>
 
-        <h3>Cash Out Grades</h3>
+        <h3>Grade Counts</h3>
         <div class="journal-grid">${grades}</div>
       `;
 
@@ -1506,7 +2143,9 @@
                 <div class="journal-item-body">
                   ${unlocked ? item.discovery : `Unlocks at Rank ${item.unlockRank}. The cube is hiding this one behind a tiny velvet rope made of poor decisions.`}
                   ${unlocked ? `<br><br><strong>How it works:</strong> ${item.usage}` : ''}
-                  ${unlocked ? `<br><br><strong>Owned:</strong> ${formatNumber(count)} · <strong>Lifetime received:</strong> ${formatNumber(received)} · <strong>Used:</strong> ${formatNumber(used)}` : ''}
+                  <br><br><strong>In inventory:</strong> ${count}
+                  <br><strong>Received total:</strong> ${received}
+                  <br><strong>Used total:</strong> ${used}
                 </div>
               </div>
             `;
@@ -1518,13 +2157,14 @@
         <div class="journal-list">
           ${Object.entries(HINT_PACKAGES).map(([hintKey, hint]) => {
             const unlocked = rank >= hint.unlockRank || Boolean(lifetimeStats.hintsDiscovered[hintKey]);
+            const bought = lifetimeStats.hintPurchaseCounts[hintKey] || 0;
 
             return `
               <div class="journal-item ${unlocked ? '' : 'locked'}">
                 <div class="journal-item-name">${unlocked ? hint.name : 'Locked Hint Package'}</div>
                 <div class="journal-item-body">
                   ${unlocked
-                    ? `${hint.description}<br><br><strong>Vendor price:</strong> ${hint.price.toLocaleString()} SlopCoin<br><br>${hint.snark}`
+                    ? `${hint.description}<br><br><strong>Vendor price:</strong> ${hint.price.toLocaleString()} SlopCoin<br><strong>Times purchased:</strong> ${bought}<br><br>${hint.snark}`
                     : `Unlocks at Rank ${hint.unlockRank}. The vendor is still workshopping how to monetize this specific flavor of confusion.`}
                 </div>
               </div>
@@ -1535,16 +2175,7 @@
 
       journalAchievements.innerHTML = `
         <div class="journal-list">
-          ${ACHIEVEMENT_DEFINITIONS.map(achievement => {
-            const unlocked = achievement.unlocked();
-
-            return `
-              <div class="journal-item ${unlocked ? '' : 'locked'}">
-                <div class="journal-item-name">${unlocked ? achievement.name : 'Locked Achievement'}</div>
-                <div class="journal-item-body">${unlocked ? achievement.description : 'Not earned yet. The achievement goblin remains unimpressed.'}</div>
-              </div>
-            `;
-          }).join('')}
+          ${achievementCards}
         </div>
       `;
     }
@@ -2044,6 +2675,11 @@
       if (analysis.crossedEdge) roundStats.edgeWords += 1;
       if (analysis.usedThreeFaces) roundStats.threeFaceWords += 1;
 
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.facesCleared += newlyClearedFaces;
+      if (analysis.crossedEdge) lifetimeStats.edgeWordsMade += 1;
+      if (analysis.usedThreeFaces) lifetimeStats.threeFaceWordsMade += 1;
+
       updateMissionDisplay();
     }
 
@@ -2211,6 +2847,12 @@
         return true;
       }
 
+      if (pendingAchievementCelebrations.length > 0) {
+        const payload = pendingAchievementCelebrations.shift();
+        showAchievementCelebration(payload);
+        return true;
+      }
+
       return false;
     }
 
@@ -2248,13 +2890,23 @@
 
     function removeInventoryItem(itemKey, count = 1) {
       inventory = normalizeInventory(inventory);
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       const current = inventory[itemKey] || 0;
 
       if (current < count) return false;
 
       inventory[itemKey] = current - count;
+      lifetimeStats.itemsUsed[itemKey] = (lifetimeStats.itemsUsed[itemKey] || 0) + count;
+
+      if (roundStats) {
+        addToRoundMap('itemsUsedThisRound', itemKey, count);
+      }
+
       updateInventoryDisplay();
+      updateJournalDisplay();
       saveGame();
+      checkAchievements();
+      showPendingCelebration();
       return true;
     }
 
@@ -3039,6 +3691,7 @@
       lifetimeStats.lifetimeSlopCoinSpent += hint.price;
       lifetimeStats.hintsBought += 1;
       lifetimeStats.lifetimeHintSpend += hint.price;
+      lifetimeStats.hintPurchaseCounts[hintKey] = (lifetimeStats.hintPurchaseCounts[hintKey] || 0) + 1;
       roundStats.slopCoinSpent += hint.price;
       addToRoundMap('hintsBought', hintKey, 1);
 
@@ -3052,6 +3705,7 @@
 
       updateScoreDisplay();
       updateJournalDisplay();
+      checkAchievements();
       closeMenus();
       showHintResult(hintKey, result);
       saveGame();
@@ -3723,6 +4377,12 @@
       detachSlice(selected);
     }
 
+    document.querySelectorAll('[data-open-menu]').forEach(button => {
+      button.addEventListener('click', () => {
+        openMenu(button.dataset.openMenu);
+      });
+    });
+
     document.getElementById('cancelItemUse').addEventListener('click', () => {
       if (!activeInventoryItem) return;
       deactivateInventoryItem('Item use cancelled. The candy returns to your inventory, emotionally sticky but legally intact.');
@@ -3800,12 +4460,14 @@
         failCleanWordMissions();
         updateMissionDisplay();
         saveGame();
+        checkAchievements();
 
         const failureText = isMissionFailed(currentMainMission)
           ? `${randomMissionFailureComment()} ${failedMainRoundText()}`
           : randomMissionFailureComment();
 
         clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${failureText}`);
+        showPendingCelebration();
         return;
       }
 
@@ -3859,6 +4521,8 @@
       setStatus(
         `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} SlopCoin · +${score.points} XP${rankText}`
       );
+
+      checkAchievements();
 
       if (xpResult.ranksGained > 0) {
         showRankUpCelebration(xpResult.newRank, xpResult.ranksGained);
@@ -3929,6 +4593,7 @@
       }
 
       lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
+      checkAchievements();
 
       const recapSummary = {
         grade,
@@ -3989,6 +4654,7 @@
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.totalCashouts += 1;
+      lifetimeStats.lifetimeSlopCoinBanked += totalScore;
       lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
       if (mainComplete) lifetimeStats.contractsCompleted += 1;
       if (bonusComplete) lifetimeStats.bonusContractsCompleted += 1;
@@ -4044,6 +4710,7 @@
       const shouldCelebrateFirstCashout = !hasSeenFirstCashout && bankedScore > 0;
       if (shouldCelebrateFirstCashout) hasSeenFirstCashout = true;
 
+      checkAchievements();
       startFreshRound();
       saveGame();
       updateScoreDisplay();
@@ -4207,6 +4874,8 @@
     document.getElementById('scramble').addEventListener('click', () => {
       if (busy) return;
       clearSelection('Cube scrambled.');
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.scrambleCount += 1;
 
       for (let i = 0; i < 24; i++) {
         const axis = Math.floor(Math.random() * 3);
@@ -4214,6 +4883,11 @@
         const direction = Math.random() < 0.5 ? -1 : 1;
         applyQuarterTurn(axis, layer, direction);
       }
+
+      updateJournalDisplay();
+      saveGame();
+      checkAchievements();
+      showPendingCelebration();
     });
 
     addEventListener('resize', () => {
