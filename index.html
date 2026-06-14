@@ -1107,7 +1107,10 @@
         ? isMissionComplete(currentMainMission)
         : false;
 
-      document.getElementById('cashOut').disabled = totalScore === 0 || !mainComplete;
+      document.getElementById('cashOut').disabled =
+        totalScore === 0 ||
+        !mainComplete ||
+        isMissionFailed(currentMainMission);
 
       const hasRoundProgress =
         totalScore > 0 ||
@@ -1308,7 +1311,7 @@
     }
 
     function emptyGradeCounts() {
-      return { 'S+': 0, S: 0, A: 0, B: 0, C: 0, D: 0 };
+      return { 'S+': 0, S: 0, A: 0, B: 0, C: 0, D: 0, F: 0 };
     }
 
     function emptyItemCounts() {
@@ -1336,6 +1339,7 @@
         totalCashouts: 0,
         abandonedRounds: 0,
         contractsCompleted: 0,
+        mainContractsFailed: 0,
         bonusContractsCompleted: 0,
         bonusContractsFailed: 0,
         tilesCleared: 0,
@@ -1407,6 +1411,7 @@
           ${statCard('Cash Outs', lifetimeStats.totalCashouts, 'Times you converted effort into SlopCoin and shame.')}
           ${statCard('Abandoned Rounds', lifetimeStats.abandonedRounds, 'Times you found the emergency exit and called it strategy.')}
           ${statCard('Contracts Completed', lifetimeStats.contractsCompleted, 'Main objectives beaten into submission.')}
+          ${statCard('Main Contracts Failed', lifetimeStats.mainContractsFailed, 'Rounds where the contract did not survive contact with your choices.')}
           ${statCard('Bonus Contracts', lifetimeStats.bonusContractsCompleted, 'Extra credit, but make it morally damp.')}
           ${statCard('Failed Bonus Contracts', lifetimeStats.bonusContractsFailed, 'Optional objectives you personally escorted into a ditch.')}
           ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Letters removed from cube society.')}
@@ -1518,6 +1523,8 @@
       if (grade === 'S+') return 'A disgusting little masterpiece. The cube hates how competent that looked.';
       if (grade === 'S') return 'Excellent work. Suspiciously excellent. Compliance has opened a file.';
       if (grade === 'A') return 'Main contract complete. You converted effort into SlopCoin, which is almost a life skill if you squint hard enough.';
+      if (grade === 'F') return 'The main contract failed. The round did not end. It was taken behind the cube and handled by Legal.';
+      if (grade === 'D') return 'You escaped through the shame chute. The cube respects your honesty and despises your work ethic.';
       if (netProfit < 0) return 'You lost SlopCoin this round. Bold strategy. The vendor is naming a boat after you.';
       return 'Round complete. The SlopChain burped, recorded the transaction, and immediately denied liability.';
     }
@@ -1543,7 +1550,7 @@
       `;
 
       roundRecapDetails.innerHTML = `
-        <div class="recap-line"><strong>Main Contract:</strong> ${summary.mainComplete ? 'Complete' : 'Not complete, which should be impossible on cashout. Suspicious.'}</div>
+        <div class="recap-line"><strong>Main Contract:</strong> ${summary.mainComplete ? 'Complete' : summary.grade === 'F' ? 'FAILED. The dictionary found blood on the paperwork.' : 'Incomplete. You left through the shame chute.'}</div>
         <div class="recap-line"><strong>Bonus Contract:</strong> ${summary.bonusComplete ? 'Complete' : summary.bonusFailed ? 'FAILED. Optional dignity has left the building.' : 'Incomplete. It stood there looking achievable and you walked away.'}</div>
         <div class="recap-line"><strong>Letters Bought:</strong> ${summary.lettersBought.toLocaleString()} total · ${summary.vowelsBought.toLocaleString()} vowels · ${summary.consonantsBought.toLocaleString()} consonants</div>
         <div class="recap-line"><strong>Items Bought:</strong> ${formatRoundMap(summary.itemsBought, key => INVENTORY_ITEMS[key]?.name || key)}</div>
@@ -1605,6 +1612,10 @@
           failedMissionIds.add(mission.id);
         }
       });
+    }
+
+    function failedMainRoundText() {
+      return 'MAIN CONTRACT FAILED. The round is now an F-grade dumpster ceremony. You may end it, collect nothing, and pretend this was character development.';
     }
 
     function missionProgressText(mission) {
@@ -1723,6 +1734,15 @@
 
       if (tier >= 4) {
         main.push(
+          {
+            id: 'clean_words_main',
+            stat: 'cleanWords',
+            name: 'No Take Backs',
+            target: Math.min(10, 4 + Math.floor(rank / 4)),
+            unit: ' clean words',
+            rewardXP: 175 + rank * 20,
+            flavor: 'Submit valid words with no invalid junk. One fake word kills the contract. The dictionary has a knife.'
+          },
           {
             id: 'swappy_use',
             stat: 'swappyUsed',
@@ -1854,7 +1874,16 @@
       if (cashOutButton) {
         cashOutButton.disabled =
           totalScore === 0 ||
-          !isMissionComplete(currentMainMission);
+          !isMissionComplete(currentMainMission) ||
+          isMissionFailed(currentMainMission);
+
+        const abandonButton = document.getElementById('abandonRound');
+        if (abandonButton && isMissionFailed(currentMainMission)) {
+          abandonButton.disabled = false;
+          abandonButton.textContent = 'End Failed Round';
+        } else if (abandonButton) {
+          abandonButton.textContent = 'Abandon Round';
+        }
       }
     }
 
@@ -1939,12 +1968,26 @@
     }
 
     function gradeRound(mainComplete, bonusComplete) {
-      if (mainComplete && bonusComplete && roundStats.facesCleared > 0) return 'S+';
-      if (mainComplete && bonusComplete) return 'S';
-      if (mainComplete) return 'A';
-      if (roundStats.validWords >= 5 || roundStats.tilesCleared >= 18) return 'B';
-      if (roundStats.validWords >= 3) return 'C';
-      return 'D';
+      if (isMissionFailed(currentMainMission)) return 'F';
+      if (!mainComplete) return 'D';
+
+      const impressiveFeats = [
+        roundStats.validWords >= 8,
+        roundStats.tilesCleared >= 28,
+        roundStats.scoreEarned >= 150,
+        roundStats.longestWord >= 7,
+        roundStats.rareLettersUsed > 0,
+        roundStats.edgeWords > 0,
+        roundStats.threeFaceWords > 0,
+        roundStats.facesCleared > 0,
+        roundStats.invalidWords === 0 && roundStats.validWords >= 5
+      ].filter(Boolean).length;
+
+      if (bonusComplete && (roundStats.facesCleared > 0 || impressiveFeats >= 2)) return 'S+';
+      if (bonusComplete && impressiveFeats >= 1) return 'S';
+      if (bonusComplete) return 'A';
+      if (roundStats.validWords >= 5 || roundStats.tilesCleared >= 18 || roundStats.scoreEarned >= 100) return 'B';
+      return 'C';
     }
 
     function launchConfetti() {
@@ -3644,7 +3687,12 @@
         failCleanWordMissions();
         updateMissionDisplay();
         saveGame();
-        clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${randomMissionFailureComment()}`);
+
+        const failureText = isMissionFailed(currentMainMission)
+          ? `${randomMissionFailureComment()} ${failedMainRoundText()}`
+          : randomMissionFailureComment();
+
+        clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${failureText}`);
         return;
       }
 
@@ -3742,7 +3790,10 @@
     document.getElementById('abandonRound').addEventListener('click', () => {
       if (busy) return;
 
+      const mainFailed = isMissionFailed(currentMainMission);
+
       const hadProgress =
+        mainFailed ||
         totalScore > 0 ||
         (roundStats && (
           roundStats.validWords > 0 ||
@@ -3754,12 +3805,44 @@
       if (!hadProgress) return;
 
       const lostSlopCoin = totalScore;
+      const grade = mainFailed ? 'F' : 'D';
+
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
-      lifetimeStats.abandonedRounds += 1;
+
+      if (mainFailed) {
+        lifetimeStats.mainContractsFailed += 1;
+      } else {
+        lifetimeStats.abandonedRounds += 1;
+      }
+
+      lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
+
+      const recapSummary = {
+        grade,
+        earned: roundStats.scoreEarned,
+        spent: roundStats.slopCoinSpent,
+        netProfit: 0 - roundStats.slopCoinSpent,
+        banked: 0,
+        missionXP: 0,
+        mainComplete: false,
+        bonusComplete: false,
+        bonusFailed: isMissionFailed(currentBonusMission),
+        validWords: roundStats.validWords,
+        invalidWords: roundStats.invalidWords,
+        tilesCleared: roundStats.tilesCleared,
+        lettersBought: roundStats.lettersBought,
+        vowelsBought: roundStats.vowelsBought,
+        consonantsBought: roundStats.consonantsBought,
+        itemsBought: { ...(roundStats.itemsBought || {}) },
+        itemsUsedThisRound: { ...(roundStats.itemsUsedThisRound || {}) },
+        hintsBought: { ...(roundStats.hintsBought || {}) }
+      };
 
       totalScore = 0;
       pendingConsonants = 0;
       pendingVowels = 0;
+      pendingItemPurchases = {};
+      nextWordMultiplier = 1;
 
       deactivateInventoryItem();
       startFreshRound();
@@ -3768,8 +3851,12 @@
       updateJournalDisplay();
 
       setStatus(
-        `Round abandoned. ${lostSlopCoin.toLocaleString()} SlopCoin evaporated into the shame vents. Fresh cube loaded. Nobody clapped.`
+        mainFailed
+          ? `Failed round ended. ${lostSlopCoin.toLocaleString()} Unrealized SlopCoin was seized by the dictionary police. Fresh cube loaded.`
+          : `Round abandoned. ${lostSlopCoin.toLocaleString()} Unrealized SlopCoin evaporated into the shame vents. Fresh cube loaded. Nobody clapped.`
       );
+
+      showRoundRecap(recapSummary);
     });
 
     document.getElementById('cashOut').addEventListener('click', () => {
