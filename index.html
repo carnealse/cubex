@@ -868,7 +868,7 @@
         vendorPrice: 120,
         description: 'Add one random vowel to a blank space.',
         discovery: 'You have acquired a Vowel Voucher, a coupon printed on paper so flimsy it already looks financially underwater.',
-        usage: 'Not wired as a usable item yet. Soon it will add one random vowel to a blank ghost tile when your cube looks like it was assembled by a consonant supremacist.'
+        usage: 'Press I to open Inventory, click Vowel Voucher, and it instantly fills one blank ghost tile with a random vowel. It is not charity. It is sponsored vowel leakage.'
       },
       consonantCoupon: {
         name: 'Consonant Coupon',
@@ -876,7 +876,7 @@
         vendorPrice: 95,
         description: 'Add one random consonant to a blank space.',
         discovery: 'You received a Consonant Coupon. It smells like printer toner, regret, and a mall kiosk that definitely sells phone cases and tax advice.',
-        usage: 'Not wired as a usable item yet. Soon it will add one random consonant to a blank ghost tile, because sometimes the alphabet needs cheap labor.'
+        usage: 'Press I to open Inventory, click Consonant Coupon, and it instantly fills one blank ghost tile with a random consonant. Cheap labor, but alphabetic.'
       },
       letterLeech: {
         name: 'Letter Leech',
@@ -884,7 +884,7 @@
         vendorPrice: 180,
         description: 'Remove one unwanted active letter.',
         discovery: 'A damp little parasite has joined your inventory. It is called Letter Leech, and no, it did not pass a background check.',
-        usage: 'Not wired as a usable item yet. Soon it will remove one active letter you hate, leaving a blank tile and a faint moral residue.'
+        usage: 'Press I to open Inventory, click Letter Leech, then click one active letter on the cube. The leech removes it, leaves a blank tile, and refuses to make eye contact.'
       },
       cubeReroll: {
         name: 'Cube Reroll',
@@ -892,7 +892,7 @@
         vendorPrice: 275,
         description: 'Reroll active letters on one face.',
         discovery: 'You found a Cube Reroll. It is less a tool and more a formal request for the cube to stop being such an alphabet landfill.',
-        usage: 'Not wired as a usable item yet. Soon it will reroll active letters on one face, because therapy was too expensive and violence against vowels was discouraged.'
+        usage: 'Press I to open Inventory, click Cube Reroll, then click any active letter on the face you want to reroll. Every active letter on that face gets replaced. Blank ghost tiles stay dead because even chaos has paperwork.'
       },
       multiplierMint: {
         name: 'Multiplier Mint',
@@ -900,7 +900,7 @@
         vendorPrice: 400,
         description: 'Boost the next valid word.',
         discovery: 'You received a Multiplier Mint. It makes numbers bigger, breath worse, and ethics optional. Finance people call this innovation.',
-        usage: 'Not wired as a usable item yet. Soon it will boost your next valid word, converting minty fraud into SlopCoin.'
+        usage: 'Press I to open Inventory and click Multiplier Mint. Your next valid word gets a 2x boost. After that, the mint is gone, your breath is worse, and the economy remains fake.'
       }
     };
 
@@ -915,6 +915,7 @@
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
     let pendingItemPurchases = {};
+    let nextWordMultiplier = 1;
     let currentMainMission = null;
     let currentBonusMission = null;
     let failedMissionIds = new Set();
@@ -1868,13 +1869,7 @@
 
         row.addEventListener('click', () => {
           if (count <= 0) return;
-
-          if (itemKey === 'swappyPop') {
-            activateSwappyPop();
-            closeMenus();
-          } else {
-            setStatus(`${item.name} is in your bag, but the cube lawyers have not approved its active use yet.`);
-          }
+          useInventoryItem(itemKey);
         });
 
         inventoryList.appendChild(row);
@@ -1889,11 +1884,21 @@
 
       const item = INVENTORY_ITEMS[activeInventoryItem];
 
-      activeItemIcon.textContent = activeInventoryItem === 'swappyPop' ? '🍭' : '🎒';
+      const icons = {
+        swappyPop: '🍭',
+        letterLeech: '🪱',
+        cubeReroll: '🎲'
+      };
+
+      const instructions = {
+        swappyPop: 'Click two active letters to swap them, or cancel if you regained judgment.',
+        letterLeech: 'Click one active letter to remove it, or cancel before the leech gets emotionally attached.',
+        cubeReroll: 'Click any active letter on the face you want rerolled, or cancel before the cube calls OSHA.'
+      };
+
+      activeItemIcon.textContent = icons[activeInventoryItem] || '🎒';
       activeItemTitle.textContent = `${item.name} armed`;
-      activeItemText.textContent = activeInventoryItem === 'swappyPop'
-        ? 'Click two active letters to swap them, or cancel if you regained judgment.'
-        : 'Item armed. The cube lawyers are still arguing about what this does.';
+      activeItemText.textContent = instructions[activeInventoryItem] || 'Item armed. The cube lawyers are still arguing about what this does.';
 
       activeItemHud.classList.add('open');
     }
@@ -1958,6 +1963,175 @@
       removeInventoryItem('swappyPop', 1);
       deactivateInventoryItem('Swappy Pop consumed. Two letters swapped. Deliciously suspicious.');
       return true;
+    }
+
+    function activeStickerPool() {
+      return stickers.filter(sticker => sticker.visible && !sticker.userData.used);
+    }
+
+    function removeStickerLetter(sticker) {
+      sticker.userData.selected = false;
+      sticker.userData.used = true;
+      sticker.visible = true;
+      refreshStickerTexture(sticker);
+    }
+
+    function useVowelVoucher() {
+      const blanks = blankStickers();
+
+      if (!blanks.length) {
+        setStatus('Vowel Voucher rejected. There are no blank tiles. The vowel union refuses to work without an opening.');
+        return false;
+      }
+
+      const sticker = chooseRandomBlank(blanks);
+      fillBlankSticker(sticker, randomVowel(), 'item');
+      removeInventoryItem('vowelVoucher', 1);
+      updateVendorDisplay();
+      updateScoreDisplay();
+      setStatus('Vowel Voucher used. One random vowel crawled into a blank space and is pretending it belongs there.');
+      return true;
+    }
+
+    function useConsonantCoupon() {
+      const blanks = blankStickers();
+
+      if (!blanks.length) {
+        setStatus('Consonant Coupon rejected. No blank tiles available. The coupon has been asked to sit down and stop making eye contact.');
+        return false;
+      }
+
+      const sticker = chooseRandomBlank(blanks);
+      fillBlankSticker(sticker, randomConsonant(), 'item');
+      removeInventoryItem('consonantCoupon', 1);
+      updateVendorDisplay();
+      updateScoreDisplay();
+      setStatus('Consonant Coupon used. One discount consonant has entered the workforce.');
+      return true;
+    }
+
+    function activateLetterLeech() {
+      if ((inventory.letterLeech || 0) <= 0) {
+        deactivateInventoryItem('No Letter Leeches left. The wetlands are empty.');
+        return;
+      }
+
+      clearSelection('Letter Leech armed. Click one active letter to remove it.');
+      activeInventoryItem = 'letterLeech';
+      activeSwapFirstSticker = null;
+      updateInventoryDisplay();
+      updateActiveItemHud();
+    }
+
+    function handleLetterLeechSelection(sticker) {
+      if (!sticker || sticker.userData.used || !sticker.visible) return true;
+
+      removeStickerLetter(sticker);
+      removeInventoryItem('letterLeech', 1);
+      updateMissionDisplay();
+      updateVendorDisplay();
+      updateScoreDisplay();
+      deactivateInventoryItem('Letter Leech consumed. One letter has been removed and reported missing by absolutely no one.');
+      return true;
+    }
+
+    function activateCubeReroll() {
+      if ((inventory.cubeReroll || 0) <= 0) {
+        deactivateInventoryItem('No Cube Rerolls left. Chaos has a budget.');
+        return;
+      }
+
+      clearSelection('Cube Reroll armed. Click one active letter on the face you want rerolled.');
+      activeInventoryItem = 'cubeReroll';
+      activeSwapFirstSticker = null;
+      updateInventoryDisplay();
+      updateActiveItemHud();
+    }
+
+    function sameCurrentFace(a, b) {
+      return faceKeyFromNormal(worldNormalForSticker(a)) === faceKeyFromNormal(worldNormalForSticker(b));
+    }
+
+    function handleCubeRerollSelection(sticker) {
+      if (!sticker || sticker.userData.used || !sticker.visible) return true;
+
+      const faceStickers = stickers.filter(candidate =>
+        candidate.visible &&
+        !candidate.userData.used &&
+        sameCurrentFace(candidate, sticker)
+      );
+
+      if (!faceStickers.length) {
+        setStatus('Cube Reroll found no active letters on that face. Somehow the cube made even chaos boring.');
+        return true;
+      }
+
+      faceStickers.forEach(candidate => {
+        candidate.userData.letter = Math.random() < 0.39 ? randomVowel() : randomConsonant();
+        candidate.userData.source = 'item';
+        candidate.userData.selected = false;
+        refreshStickerTexture(candidate);
+      });
+
+      removeInventoryItem('cubeReroll', 1);
+      updateWordDisplay();
+      updateMissionDisplay();
+      updateVendorDisplay();
+      updateScoreDisplay();
+      deactivateInventoryItem(`Cube Reroll consumed. ${faceStickers.length} letters on that face were reassigned by a deeply unserious committee.`);
+      return true;
+    }
+
+    function useMultiplierMint() {
+      if ((inventory.multiplierMint || 0) <= 0) {
+        setStatus('No Multiplier Mints left. Your breath is financially neutral.');
+        return false;
+      }
+
+      if (nextWordMultiplier > 1) {
+        setStatus('Multiplier Mint already active. Do not double-mint. That is how accounting demons are born.');
+        return false;
+      }
+
+      removeInventoryItem('multiplierMint', 1);
+      nextWordMultiplier = 2;
+      updateScoreDisplay();
+      setStatus('Multiplier Mint consumed. Your next valid word gets 2x SlopCoin and 2x XP. This is fraud with a refreshing finish.');
+      return true;
+    }
+
+    function useInventoryItem(itemKey) {
+      if (itemKey === 'swappyPop') {
+        activateSwappyPop();
+        closeMenus();
+        return;
+      }
+
+      if (itemKey === 'vowelVoucher') {
+        if (useVowelVoucher()) closeMenus();
+        return;
+      }
+
+      if (itemKey === 'consonantCoupon') {
+        if (useConsonantCoupon()) closeMenus();
+        return;
+      }
+
+      if (itemKey === 'letterLeech') {
+        activateLetterLeech();
+        closeMenus();
+        return;
+      }
+
+      if (itemKey === 'cubeReroll') {
+        activateCubeReroll();
+        closeMenus();
+        return;
+      }
+
+      if (itemKey === 'multiplierMint') {
+        if (useMultiplierMint()) closeMenus();
+      }
     }
 
     const RANK_TITLES = [
@@ -2133,6 +2307,7 @@
       pendingConsonants = 0;
       pendingVowels = 0;
       pendingItemPurchases = {};
+      nextWordMultiplier = 1;
       updateVendorDisplay();
     }
 
@@ -2621,6 +2796,16 @@
         return;
       }
 
+      if (activeInventoryItem === 'letterLeech') {
+        handleLetterLeechSelection(sticker);
+        return;
+      }
+
+      if (activeInventoryItem === 'cubeReroll') {
+        handleCubeRerollSelection(sticker);
+        return;
+      }
+
       const existingIndex = selectedStickers.indexOf(sticker);
 
       if (existingIndex >= 0) {
@@ -2955,6 +3140,12 @@
       }
 
       const score = calculateWordScore(word);
+      const appliedItemMultiplier = nextWordMultiplier;
+      if (appliedItemMultiplier > 1) {
+        score.points = Math.round(score.points * appliedItemMultiplier);
+      }
+      nextWordMultiplier = 1;
+
       const submittedPath = [...selectedStickers];
       const facesBefore = clearedFaceCount();
       totalScore += score.points;
@@ -2982,9 +3173,13 @@
       updateScoreDisplay(score.points);
       updateVendorDisplay();
 
-      const multiplierText = score.multiplier === 1
+      const lengthMultiplierText = score.multiplier === 1
         ? ''
         : ` · ${score.multiplier}× length multiplier`;
+      const itemMultiplierText = appliedItemMultiplier > 1
+        ? ` · ${appliedItemMultiplier}× Multiplier Mint`
+        : '';
+      const multiplierText = `${lengthMultiplierText}${itemMultiplierText}`;
 
       const xpResult = addXP(score.points);
       const rankText = xpResult.ranksGained > 0
