@@ -3356,21 +3356,21 @@
     }
 
     async function loadExternalWordLists() {
-      const [mainWords, patchWords] = await Promise.all([
+      const [mainWords, patchWords, challengeWords] = await Promise.all([
         loadExternalWordListFile('wordlist.txt'),
-        loadExternalWordListFile('wordlist_patched.txt')
+        loadExternalWordListFile('wordlist_patched.txt'),
+        loadExternalWordListFile('challenge_wordlist.txt')
       ]);
 
-      if (mainWords.size || patchWords.size) {
-        ALLOWED_WORDS = new Set([
-          ...ALLOWED_WORDS,
-          ...mainWords,
-          ...patchWords
-        ]);
-      }
+      ALLOWED_WORDS = new Set([
+        ...ALLOWED_WORDS,
+        ...mainWords,
+        ...patchWords,
+        ...challengeWords
+      ]);
 
       console.info(
-        `CubeX wordlists loaded. Embedded + wordlist.txt + wordlist_patched.txt = ${ALLOWED_WORDS.size.toLocaleString()} allowed words.`
+        `CubeX wordlists loaded. Embedded + wordlist.txt + wordlist_patched.txt + challenge_wordlist.txt = ${ALLOWED_WORDS.size.toLocaleString()} allowed words.`
       );
     }
 
@@ -3511,6 +3511,16 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         dailyChallenges = Array.isArray(data) ? data : [];
+
+        dailyChallenges.forEach(challenge => {
+          (challenge.words || []).forEach(word => {
+            const cleaned = String(word || '').toLowerCase();
+            if (/^[a-z]+$/.test(cleaned)) {
+              ALLOWED_WORDS.add(cleaned);
+            }
+          });
+        });
+
         updateDailyDisplay();
       } catch (error) {
         console.warn('Daily challenges failed to load:', error);
