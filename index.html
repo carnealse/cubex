@@ -116,92 +116,42 @@
       border-radius: 999px;
       background: #72f5b1;
     }
-    .game-hints {
+    .vendor-panel {
       position: fixed;
       left: 18px;
       bottom: 18px;
       z-index: 4;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .game-hint {
-      padding: 7px 10px;
-      border-radius: 999px;
+      width: 250px;
+      padding: 12px;
+      border-radius: 12px;
       border: 1px solid rgba(255,255,255,.14);
-      background: rgba(20,23,30,.78);
-      color: #dbe2ee;
-      font-size: 12px;
-      font-weight: 800;
+      background: rgba(20,23,30,.9);
       backdrop-filter: blur(10px);
     }
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,.48);
-      backdrop-filter: blur(5px);
-    }
-    .modal-backdrop.open {
-      display: flex;
-    }
-    .game-modal {
-      width: min(520px, calc(100vw - 32px));
-      max-height: min(680px, calc(100vh - 48px));
-      overflow: auto;
-      padding: 16px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(20,23,30,.96);
-      box-shadow: 0 24px 80px rgba(0,0,0,.55);
-    }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
-    .modal-title {
+    .vendor-title {
       color: #f7f8fb;
-      font-size: 20px;
-      font-weight: 900;
+      font-size: 15px;
+      font-weight: 800;
       letter-spacing: .04em;
-    }
-    .modal-close {
-      width: 34px;
-      height: 34px;
-      padding: 0 !important;
-      border-radius: 999px;
-      font-size: 18px;
-      line-height: 1;
     }
     .vendor-meta {
       margin-top: 4px;
       color: #aeb8c9;
-      font-size: 13px;
+      font-size: 12px;
     }
     .vendor-row {
       display: grid;
-      grid-template-columns: 1fr 34px 38px 34px;
+      grid-template-columns: 1fr 30px 32px 30px;
       align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      padding: 10px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.06);
+      gap: 6px;
+      margin-top: 10px;
     }
     .vendor-item {
       color: #e6eaf0;
-      font-size: 14px;
-      font-weight: 800;
+      font-size: 13px;
+      font-weight: 700;
     }
     .vendor-cost {
-      display: block;
-      margin-top: 2px;
       color: #9faabc;
       font-size: 11px;
       font-weight: 500;
@@ -209,32 +159,17 @@
     .vendor-qty {
       text-align: center;
       color: #f7f8fb;
-      font-size: 16px;
-      font-weight: 900;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .vendor-panel button {
+      padding: 5px 8px;
+      min-width: 30px;
     }
     .vendor-buy {
       width: 100%;
-      margin-top: 14px;
-      padding: 10px 12px !important;
-    }
-    .inventory-list {
-      margin-top: 8px;
-      display: grid;
-      gap: 8px;
-    }
-    .inventory-item {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.06);
-      color: #e6eaf0;
-      font-size: 13px;
-    }
-    .inventory-count {
-      color: #72f5b1;
-      font-weight: 900;
+      margin-top: 12px;
+      padding: 8px 10px !important;
     }
     .controls {
       position: fixed;
@@ -279,45 +214,22 @@
     <div class="xp-bar"><div id="xpFill" class="xp-fill"></div></div>
   </div>
 
-  <div class="game-hints">
-    <div class="game-hint">I · Inventory</div>
-    <div class="game-hint">V · Vendor</div>
-    <div class="game-hint">ESC · Close</div>
-  </div>
-
-  <div id="vendorModal" class="modal-backdrop" aria-hidden="true">
-    <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="vendorTitle">
-      <div class="modal-header">
-        <div id="vendorTitle" class="modal-title">Vendor</div>
-        <button class="modal-close" data-close-modal aria-label="Close vendor">×</button>
-      </div>
-
-      <div class="vendor-meta">Blank spaces: <span id="blankCount">0</span></div>
-      <div class="vendor-row">
-        <div class="vendor-item">Consonants <span class="vendor-cost">1 pt each</span></div>
-        <button id="consonantMinus" aria-label="Remove consonant">−</button>
-        <div id="consonantQty" class="vendor-qty">0</div>
-        <button id="consonantPlus" aria-label="Add consonant">+</button>
-      </div>
-      <div class="vendor-row">
-        <div class="vendor-item">Vowels <span class="vendor-cost">2 pts each</span></div>
-        <button id="vowelMinus" aria-label="Remove vowel">−</button>
-        <div id="vowelQty" class="vendor-qty">0</div>
-        <button id="vowelPlus" aria-label="Add vowel">+</button>
-      </div>
-      <button id="vendorBuy" class="vendor-buy">Buy Letters</button>
+  <div class="vendor-panel">
+    <div class="vendor-title">Vendor</div>
+    <div class="vendor-meta">Blank spaces: <span id="blankCount">0</span></div>
+    <div class="vendor-row">
+      <div class="vendor-item">Consonants <span class="vendor-cost">1 pt each</span></div>
+      <button id="consonantMinus" aria-label="Remove consonant">−</button>
+      <div id="consonantQty" class="vendor-qty">0</div>
+      <button id="consonantPlus" aria-label="Add consonant">+</button>
     </div>
-  </div>
-
-  <div id="inventoryModal" class="modal-backdrop" aria-hidden="true">
-    <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="inventoryTitle">
-      <div class="modal-header">
-        <div id="inventoryTitle" class="modal-title">Inventory</div>
-        <button class="modal-close" data-close-modal aria-label="Close inventory">×</button>
-      </div>
-
-      <div id="inventoryList" class="inventory-list"></div>
+    <div class="vendor-row">
+      <div class="vendor-item">Vowels <span class="vendor-cost">2 pts each</span></div>
+      <button id="vowelMinus" aria-label="Remove vowel">−</button>
+      <div id="vowelQty" class="vendor-qty">0</div>
+      <button id="vowelPlus" aria-label="Add vowel">+</button>
     </div>
+    <button id="vendorBuy" class="vendor-buy">Buy Letters</button>
   </div>
 
   <div class="controls">
@@ -396,53 +308,13 @@
     const blankCount = document.getElementById('blankCount');
     const consonantQty = document.getElementById('consonantQty');
     const vowelQty = document.getElementById('vowelQty');
-    const inventoryList = document.getElementById('inventoryList');
-    const vendorModal = document.getElementById('vendorModal');
-    const inventoryModal = document.getElementById('inventoryModal');
 
     const SAVE_KEY = 'cubex-save-v1';
-
-    const DEFAULT_INVENTORY = {
-      swappyPop: 0,
-      vowelVoucher: 0,
-      consonantCoupon: 0,
-      letterLeech: 0,
-      cubeReroll: 0,
-      multiplierMint: 0
-    };
-
-    const INVENTORY_ITEMS = {
-      swappyPop: {
-        name: 'Swappy Pop',
-        description: 'Swap any two active letters once.'
-      },
-      vowelVoucher: {
-        name: 'Vowel Voucher',
-        description: 'Add one random vowel to a blank space.'
-      },
-      consonantCoupon: {
-        name: 'Consonant Coupon',
-        description: 'Add one random consonant to a blank space.'
-      },
-      letterLeech: {
-        name: 'Letter Leech',
-        description: 'Remove one unwanted letter.'
-      },
-      cubeReroll: {
-        name: 'Cube Reroll',
-        description: 'Reroll active letters on one face.'
-      },
-      multiplierMint: {
-        name: 'Multiplier Mint',
-        description: 'Boost the next valid word.'
-      }
-    };
 
     let totalScore = 0;
     let bankedScore = 0;
     let totalXP = 0;
     let rank = 1;
-    let inventory = { ...DEFAULT_INVENTORY };
     let pendingConsonants = 0;
     let pendingVowels = 0;
 
@@ -490,73 +362,6 @@
       document.getElementById('cashOut').disabled = totalScore === 0;
       updateRankDisplay();
       updateVendorDisplay();
-      updateInventoryDisplay();
-    }
-
-    function closeMenus() {
-      vendorModal.classList.remove('open');
-      vendorModal.setAttribute('aria-hidden', 'true');
-      inventoryModal.classList.remove('open');
-      inventoryModal.setAttribute('aria-hidden', 'true');
-    }
-
-    function openMenu(menuName) {
-      closeMenus();
-
-      if (menuName === 'vendor') {
-        updateVendorDisplay();
-        vendorModal.classList.add('open');
-        vendorModal.setAttribute('aria-hidden', 'false');
-      }
-
-      if (menuName === 'inventory') {
-        updateInventoryDisplay();
-        inventoryModal.classList.add('open');
-        inventoryModal.setAttribute('aria-hidden', 'false');
-      }
-    }
-
-    function normalizeInventory(value) {
-      return {
-        ...DEFAULT_INVENTORY,
-        ...(value && typeof value === 'object' ? value : {})
-      };
-    }
-
-    function addInventoryItem(itemKey, count = 1) {
-      inventory = normalizeInventory(inventory);
-      inventory[itemKey] = (inventory[itemKey] || 0) + count;
-      updateInventoryDisplay();
-      saveGame();
-    }
-
-    function removeInventoryItem(itemKey, count = 1) {
-      inventory = normalizeInventory(inventory);
-      const current = inventory[itemKey] || 0;
-
-      if (current < count) return false;
-
-      inventory[itemKey] = current - count;
-      updateInventoryDisplay();
-      saveGame();
-      return true;
-    }
-
-    function updateInventoryDisplay() {
-      inventory = normalizeInventory(inventory);
-      inventoryList.innerHTML = '';
-
-      for (const [itemKey, item] of Object.entries(INVENTORY_ITEMS)) {
-        const count = inventory[itemKey] || 0;
-        const row = document.createElement('div');
-        row.className = 'inventory-item';
-        row.title = item.description;
-        row.innerHTML = `
-          <span>${item.name}</span>
-          <span class="inventory-count">x${count}</span>
-        `;
-        inventoryList.appendChild(row);
-      }
     }
 
     const RANK_TITLES = [
@@ -608,8 +413,7 @@
       const save = {
         bankedScore,
         totalXP,
-        rank,
-        inventory: normalizeInventory(inventory)
+        rank
       };
 
       localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -624,7 +428,6 @@
         bankedScore = Number(save.bankedScore) || 0;
         totalXP = Number(save.totalXP) || 0;
         rank = rankFromXP(totalXP);
-        inventory = normalizeInventory(save.inventory);
       } catch {
         bankedScore = 0;
         totalXP = 0;
@@ -1353,37 +1156,6 @@
       detachSlice(selected);
     }
 
-    document.addEventListener('keydown', event => {
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
-
-      if (typing) return;
-
-      if (event.key === 'Escape') {
-        closeMenus();
-        return;
-      }
-
-      if (event.key.toLowerCase() === 'v') {
-        openMenu('vendor');
-        return;
-      }
-
-      if (event.key.toLowerCase() === 'i') {
-        openMenu('inventory');
-      }
-    });
-
-    document.querySelectorAll('[data-close-modal]').forEach(button => {
-      button.addEventListener('click', closeMenus);
-    });
-
-    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-      backdrop.addEventListener('pointerdown', event => {
-        if (event.target === backdrop) closeMenus();
-      });
-    });
-
     document.getElementById('submit').addEventListener('click', () => {
       if (busy || selectedStickers.length === 0) return;
 
@@ -1557,7 +1329,6 @@
     updateWordDisplay();
     updateScoreDisplay();
     updateVendorDisplay();
-    updateInventoryDisplay();
     updateCamera();
     animate();
   </script>
