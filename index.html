@@ -2124,7 +2124,7 @@
       rankUpName.textContent = titleForRank(newRank);
       rankUpDescription.textContent = randomRankUpDescription();
       rankUpReward.textContent =
-        `Reward: +${ranksGained} Swappy Pop${ranksGained === 1 ? '' : 's'}. Candy-based advancement is the backbone of this diseased little economy.`;
+        `Reward: +${ranksGained} Swappy Pop${ranksGained === 1 ? '' : 's'}. Rank-based candy distribution is the backbone of this diseased little economy.`;
 
       rankUpModal.classList.add('open');
       rankUpModal.setAttribute('aria-hidden', 'false');
@@ -4007,10 +4007,10 @@
         rewardText += ` Bonus complete: +${currentBonusMission.rewardXP} XP.`;
       }
 
-      if (grade === 'S' || grade === 'S+') {
-        const rewardCount = grade === 'S+' ? 2 : 1;
+      if (grade === 'S+') {
+        const rewardCount = 1;
         const rewardItemKey = addRandomUnlockedItem(rewardCount);
-        rewardText += ` +${rewardCount} ${INVENTORY_ITEMS[rewardItemKey].name} reward.`;
+        rewardText += ` +1 ${INVENTORY_ITEMS[rewardItemKey].name} S+ reward.`;
       }
 
       const cashoutXPResult = missionXP > 0
