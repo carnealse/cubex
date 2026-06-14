@@ -3472,7 +3472,18 @@
 
     function rewardName(reward) {
       if (!reward) return 'Mystery Garbage';
-      if (reward.type === 'item') return `${reward.count || 1} ${INVENTORY_ITEMS[reward.itemKey]?.name || reward.itemKey}`;
+
+      if (reward.type === 'item') {
+        const item = INVENTORY_ITEMS[reward.itemKey];
+        const count = reward.count || 1;
+
+        if (isItemUnlocked(reward.itemKey)) {
+          return `${count} ${item?.name || reward.itemKey}`;
+        }
+
+        return `${fallbackSlopCoinForLockedDailyItem(reward)} SlopCoin, locked ${item?.name || reward.itemKey} converted`;
+      }
+
       if (reward.type === 'slopcoin') return `${reward.amount || 0} SlopCoin`;
       return 'Suspicious Reward';
     }
@@ -3492,13 +3503,31 @@
       });
     }
 
+    function fallbackSlopCoinForLockedDailyItem(reward) {
+      const item = INVENTORY_ITEMS[reward.itemKey];
+      const count = Number(reward.count || 1);
+      const baseValue = item?.vendorPrice ? Math.max(10, Math.round(item.vendorPrice * 0.35)) : 15;
+      return baseValue * count;
+    }
+
     function grantDailyReward(reward) {
       if (!reward) return 'Mystery Garbage';
 
       if (reward.type === 'item') {
         const count = Number(reward.count || 1);
-        addInventoryItem(reward.itemKey, count);
-        return `${count} ${INVENTORY_ITEMS[reward.itemKey]?.name || reward.itemKey}`;
+        const item = INVENTORY_ITEMS[reward.itemKey];
+
+        if (isItemUnlocked(reward.itemKey)) {
+          addInventoryItem(reward.itemKey, count);
+          return `${count} ${item?.name || reward.itemKey}`;
+        }
+
+        const fallbackAmount = fallbackSlopCoinForLockedDailyItem(reward);
+        bankedScore += fallbackAmount;
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.achievementSlopCoinAwarded += fallbackAmount;
+
+        return `${fallbackAmount} SlopCoin instead of locked ${item?.name || reward.itemKey}`;
       }
 
       if (reward.type === 'slopcoin') {
