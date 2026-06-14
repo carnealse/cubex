@@ -542,6 +542,49 @@
       margin: 10px 0;
       text-transform: uppercase;
     }
+    .recap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .recap-card {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      text-align: left;
+    }
+    .recap-label {
+      color: #aeb8c9;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .recap-value {
+      margin-top: 3px;
+      color: #72f5b1;
+      font-size: 20px;
+      font-weight: 1000;
+    }
+    .recap-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 7px;
+      text-align: left;
+    }
+    .recap-line {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      color: #dbe2ee;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .recap-loss {
+      color: #ff8a8a;
+    }
     .inventory-list {
       margin-top: 8px;
       display: grid;
@@ -621,7 +664,7 @@
   </div>
 
   <div class="score-panel">
-    <div class="score-label">Current SlopCoin</div>
+    <div class="score-label">Unrealized SlopCoin</div>
     <div id="scoreValue" class="score-value">0</div>
     <div id="scoreLast" class="score-last"></div>
     <div class="score-label" style="margin-top:10px;">Banked SlopCoin</div>
@@ -697,6 +740,23 @@
       <div id="journalStats" class="journal-section active"></div>
       <div id="journalItems" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
+    </div>
+  </div>
+
+  <div id="roundRecapModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="roundRecapTitle">
+      <div class="modal-header">
+        <div id="roundRecapTitle" class="modal-title">Round Recap</div>
+        <button class="modal-close" data-close-modal aria-label="Close round recap">×</button>
+      </div>
+
+      <div id="roundRecapGrade" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="roundRecapSnark"></p>
+      </div>
+      <div id="roundRecapGrid" class="recap-grid"></div>
+      <div id="roundRecapDetails" class="recap-list"></div>
+      <button class="celebration-button" data-close-modal>Accept This Fiscal Autopsy</button>
     </div>
   </div>
 
@@ -890,6 +950,11 @@
     const journalStats = document.getElementById('journalStats');
     const journalItems = document.getElementById('journalItems');
     const journalAchievements = document.getElementById('journalAchievements');
+    const roundRecapModal = document.getElementById('roundRecapModal');
+    const roundRecapGrade = document.getElementById('roundRecapGrade');
+    const roundRecapSnark = document.getElementById('roundRecapSnark');
+    const roundRecapGrid = document.getElementById('roundRecapGrid');
+    const roundRecapDetails = document.getElementById('roundRecapDetails');
     const hintModal = document.getElementById('hintModal');
     const hintPackageName = document.getElementById('hintPackageName');
     const hintWord = document.getElementById('hintWord');
@@ -1067,6 +1132,8 @@
       inventoryModal.setAttribute('aria-hidden', 'true');
       journalModal.classList.remove('open');
       journalModal.setAttribute('aria-hidden', 'true');
+      roundRecapModal.classList.remove('open');
+      roundRecapModal.setAttribute('aria-hidden', 'true');
       hintModal.classList.remove('open');
       hintModal.setAttribute('aria-hidden', 'true');
       firstCashoutModal.classList.remove('open');
@@ -1411,8 +1478,81 @@
         vendorLettersUsed: 0,
         swappyUsed: 0,
         facesCleared: 0,
-        cleanWords: 0
+        cleanWords: 0,
+        slopCoinSpent: 0,
+        lettersBought: 0,
+        vowelsBought: 0,
+        consonantsBought: 0,
+        itemsBought: {},
+        hintsBought: {},
+        itemsUsedThisRound: {}
       };
+    }
+
+    function addToRoundMap(mapName, key, count = 1) {
+      if (!roundStats) return;
+      roundStats[mapName] = roundStats[mapName] || {};
+      roundStats[mapName][key] = (roundStats[mapName][key] || 0) + count;
+    }
+
+    function formatRoundMap(map, labelForKey) {
+      const entries = Object.entries(map || {}).filter(([, count]) => count > 0);
+
+      if (!entries.length) return 'Nothing. Not even a suspicious receipt.';
+
+      return entries
+        .map(([key, count]) => `${count.toLocaleString()} ${labelForKey(key, count)}`)
+        .join(', ');
+    }
+
+    function recapCard(label, value, extraClass = '') {
+      return `
+        <div class="recap-card">
+          <div class="recap-label">${label}</div>
+          <div class="recap-value ${extraClass}">${value}</div>
+        </div>
+      `;
+    }
+
+    function randomRoundRecapSnark(grade, netProfit) {
+      if (grade === 'S+') return 'A disgusting little masterpiece. The cube hates how competent that looked.';
+      if (grade === 'S') return 'Excellent work. Suspiciously excellent. Compliance has opened a file.';
+      if (grade === 'A') return 'Main contract complete. You converted effort into SlopCoin, which is almost a life skill if you squint hard enough.';
+      if (netProfit < 0) return 'You lost SlopCoin this round. Bold strategy. The vendor is naming a boat after you.';
+      return 'Round complete. The SlopChain burped, recorded the transaction, and immediately denied liability.';
+    }
+
+    function showRoundRecap(summary) {
+      closeMenus();
+
+      const netClass = summary.netProfit < 0 ? 'recap-loss' : '';
+      const netPrefix = summary.netProfit > 0 ? '+' : '';
+
+      roundRecapGrade.textContent = `GRADE ${summary.grade}`;
+      roundRecapSnark.textContent = randomRoundRecapSnark(summary.grade, summary.netProfit);
+
+      roundRecapGrid.innerHTML = `
+        ${recapCard('Earned', `${summary.earned.toLocaleString()} SlopCoin`)}
+        ${recapCard('Spent', `${summary.spent.toLocaleString()} SlopCoin`, summary.spent > 0 ? 'recap-loss' : '')}
+        ${recapCard('Net Profit', `${netPrefix}${summary.netProfit.toLocaleString()} SlopCoin`, netClass)}
+        ${recapCard('Actually Banked', `${summary.banked.toLocaleString()} SlopCoin`)}
+        ${recapCard('Valid Words', summary.validWords.toLocaleString())}
+        ${recapCard('Illegal Attempts', summary.invalidWords.toLocaleString(), summary.invalidWords > 0 ? 'recap-loss' : '')}
+        ${recapCard('Tiles Cleared', summary.tilesCleared.toLocaleString())}
+        ${recapCard('XP Bonus', `${summary.missionXP.toLocaleString()} XP`)}
+      `;
+
+      roundRecapDetails.innerHTML = `
+        <div class="recap-line"><strong>Main Contract:</strong> ${summary.mainComplete ? 'Complete' : 'Not complete, which should be impossible on cashout. Suspicious.'}</div>
+        <div class="recap-line"><strong>Bonus Contract:</strong> ${summary.bonusComplete ? 'Complete' : summary.bonusFailed ? 'FAILED. Optional dignity has left the building.' : 'Incomplete. It stood there looking achievable and you walked away.'}</div>
+        <div class="recap-line"><strong>Letters Bought:</strong> ${summary.lettersBought.toLocaleString()} total · ${summary.vowelsBought.toLocaleString()} vowels · ${summary.consonantsBought.toLocaleString()} consonants</div>
+        <div class="recap-line"><strong>Items Bought:</strong> ${formatRoundMap(summary.itemsBought, key => INVENTORY_ITEMS[key]?.name || key)}</div>
+        <div class="recap-line"><strong>Items Used:</strong> ${formatRoundMap(summary.itemsUsedThisRound, key => INVENTORY_ITEMS[key]?.name || key)}</div>
+        <div class="recap-line"><strong>Hints Bought:</strong> ${formatRoundMap(summary.hintsBought, key => HINT_PACKAGES[key]?.name || key)}</div>
+      `;
+
+      roundRecapModal.classList.add('open');
+      roundRecapModal.setAttribute('aria-hidden', 'false');
     }
 
     function rankTier() {
@@ -1908,6 +2048,12 @@
     }
 
     function showPendingCelebration() {
+      if (pendingItemUnlockCelebrations[0] === '__FIRST_CASHOUT__') {
+        pendingItemUnlockCelebrations.shift();
+        showFirstCashoutCelebration();
+        return true;
+      }
+
       if (pendingRankUpCelebration) {
         const pending = pendingRankUpCelebration;
         pendingRankUpCelebration = null;
@@ -2737,6 +2883,8 @@
       lifetimeStats.lifetimeSlopCoinSpent += hint.price;
       lifetimeStats.hintsBought += 1;
       lifetimeStats.lifetimeHintSpend += hint.price;
+      roundStats.slopCoinSpent += hint.price;
+      addToRoundMap('hintsBought', hintKey, 1);
 
       const result = solveLongestPlayableWord();
 
@@ -3669,6 +3817,27 @@
         ? addXP(missionXP)
         : { ranksGained: 0, newRank: rank };
 
+      const recapSummary = {
+        grade,
+        earned: roundStats.scoreEarned,
+        spent: roundStats.slopCoinSpent,
+        netProfit: roundStats.scoreEarned - roundStats.slopCoinSpent,
+        banked: totalScore,
+        missionXP,
+        mainComplete,
+        bonusComplete,
+        bonusFailed: isMissionFailed(currentBonusMission),
+        validWords: roundStats.validWords,
+        invalidWords: roundStats.invalidWords,
+        tilesCleared: roundStats.tilesCleared,
+        lettersBought: roundStats.lettersBought,
+        vowelsBought: roundStats.vowelsBought,
+        consonantsBought: roundStats.consonantsBought,
+        itemsBought: { ...(roundStats.itemsBought || {}) },
+        itemsUsedThisRound: { ...(roundStats.itemsUsedThisRound || {}) },
+        hintsBought: { ...(roundStats.hintsBought || {}) }
+      };
+
       bankedScore += totalScore;
       totalScore = 0;
 
@@ -3682,18 +3851,21 @@
         `Cashed out ${cashedOut.toLocaleString()} SlopCoin. Grade ${grade}.${rewardText || ' Main contract complete, bonus ignored you back. Fresh cube loaded.'}`
       );
 
+      showRoundRecap(recapSummary);
+
       if (shouldCelebrateFirstCashout) {
-        if (cashoutXPResult.ranksGained > 0) {
-          pendingRankUpCelebration = {
-            newRank: cashoutXPResult.newRank,
-            ranksGained: cashoutXPResult.ranksGained
-          };
-        }
-        showFirstCashoutCelebration();
+        pendingRankUpCelebration = cashoutXPResult.ranksGained > 0
+          ? {
+              newRank: cashoutXPResult.newRank,
+              ranksGained: cashoutXPResult.ranksGained
+            }
+          : pendingRankUpCelebration;
+        pendingItemUnlockCelebrations.unshift('__FIRST_CASHOUT__');
       } else if (cashoutXPResult.ranksGained > 0) {
-        showRankUpCelebration(cashoutXPResult.newRank, cashoutXPResult.ranksGained);
-      } else {
-        showPendingCelebration();
+        pendingRankUpCelebration = {
+          newRank: cashoutXPResult.newRank,
+          ranksGained: cashoutXPResult.ranksGained
+        };
       }
     });
 
@@ -3770,10 +3942,12 @@
       bankedScore -= totalCost;
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.lifetimeSlopCoinSpent += totalCost;
+      roundStats.slopCoinSpent += totalCost;
 
       Object.entries(pendingItemPurchases).forEach(([itemKey, qty]) => {
         if (!qty || qty <= 0) return;
         addInventoryItem(itemKey, qty);
+        addToRoundMap('itemsBought', itemKey, qty);
       });
 
       const purchaseSummary = Object.entries(pendingItemPurchases)
