@@ -384,6 +384,48 @@
       margin-top: 14px;
       padding: 10px 12px !important;
     }
+    .vendor-section-title {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      color: #f7f8fb;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .vendor-shop-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .vendor-shop-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.09);
+    }
+    .vendor-shop-name {
+      color: #f7f8fb;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .vendor-shop-desc {
+      margin-top: 3px;
+      color: #aeb8c9;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .vendor-shop-price {
+      color: #72f5b1;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
     .inventory-list {
       margin-top: 8px;
       display: grid;
@@ -501,6 +543,9 @@
         <button id="vowelPlus" aria-label="Add vowel">+</button>
       </div>
       <button id="vendorBuy" class="vendor-buy">Buy Letters</button>
+
+      <div class="vendor-section-title">Definitely Legal Items</div>
+      <div id="vendorItemList" class="vendor-shop-list"></div>
     </div>
   </div>
 
@@ -583,6 +628,22 @@
         <p>Use it when one cursed letter is blocking a good word, a contract, or your fragile belief that this economy is fair.</p>
       </div>
       <button class="celebration-button" data-close-modal>Take The Candy, Obviously</button>
+    </div>
+  </div>
+
+  <div id="itemUnlockModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="itemUnlockTitle">
+      <div class="modal-header">
+        <div id="itemUnlockTitle" class="modal-title">YOU'VE RECEIVED A NEW ITEM!</div>
+        <button class="modal-close" data-close-modal aria-label="Close item unlock">×</button>
+      </div>
+
+      <div id="itemUnlockName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="itemUnlockDescription"></p>
+        <p id="itemUnlockUsage"></p>
+      </div>
+      <button class="celebration-button" data-close-modal>Fine, Add It To My Shame Bag</button>
     </div>
   </div>
 
@@ -669,6 +730,7 @@
     const xpFill = document.getElementById('xpFill');
     const blankCount = document.getElementById('blankCount');
     const consonantQty = document.getElementById('consonantQty');
+    const vendorItemList = document.getElementById('vendorItemList');
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
@@ -680,6 +742,10 @@
     const firstCashoutModal = document.getElementById('firstCashoutModal');
     const rankUpModal = document.getElementById('rankUpModal');
     const firstSwappyPopModal = document.getElementById('firstSwappyPopModal');
+    const itemUnlockModal = document.getElementById('itemUnlockModal');
+    const itemUnlockName = document.getElementById('itemUnlockName');
+    const itemUnlockDescription = document.getElementById('itemUnlockDescription');
+    const itemUnlockUsage = document.getElementById('itemUnlockUsage');
     const rankUpName = document.getElementById('rankUpName');
     const rankUpDescription = document.getElementById('rankUpDescription');
     const rankUpReward = document.getElementById('rankUpReward');
@@ -699,27 +765,51 @@
     const INVENTORY_ITEMS = {
       swappyPop: {
         name: 'Swappy Pop',
-        description: 'Swap any two active letters once.'
+        unlockRank: 2,
+        vendorPrice: 85,
+        description: 'Swap any two active letters once.',
+        discovery: `A windowless van approaches you offering candy. And just like you did as a kid, you accepted. Except this time they actually do have candy for you. It's a Swappy Pop!`,
+        usage: 'Press I to open Inventory, click Swappy Pop, then click any two active letters on the cube. The letters swap places, one Swappy Pop is consumed, and the cube files another complaint with Human Resources.'
       },
       vowelVoucher: {
         name: 'Vowel Voucher',
-        description: 'Add one random vowel to a blank space.'
+        unlockRank: 3,
+        vendorPrice: 120,
+        description: 'Add one random vowel to a blank space.',
+        discovery: 'You have acquired a Vowel Voucher, a coupon printed on paper so flimsy it already looks financially underwater.',
+        usage: 'Not wired as a usable item yet. Soon it will add one random vowel to a blank ghost tile when your cube looks like it was assembled by a consonant supremacist.'
       },
       consonantCoupon: {
         name: 'Consonant Coupon',
-        description: 'Add one random consonant to a blank space.'
+        unlockRank: 4,
+        vendorPrice: 95,
+        description: 'Add one random consonant to a blank space.',
+        discovery: 'You received a Consonant Coupon. It smells like printer toner, regret, and a mall kiosk that definitely sells phone cases and tax advice.',
+        usage: 'Not wired as a usable item yet. Soon it will add one random consonant to a blank ghost tile, because sometimes the alphabet needs cheap labor.'
       },
       letterLeech: {
         name: 'Letter Leech',
-        description: 'Remove one unwanted letter.'
+        unlockRank: 6,
+        vendorPrice: 180,
+        description: 'Remove one unwanted active letter.',
+        discovery: 'A damp little parasite has joined your inventory. It is called Letter Leech, and no, it did not pass a background check.',
+        usage: 'Not wired as a usable item yet. Soon it will remove one active letter you hate, leaving a blank tile and a faint moral residue.'
       },
       cubeReroll: {
         name: 'Cube Reroll',
-        description: 'Reroll active letters on one face.'
+        unlockRank: 8,
+        vendorPrice: 275,
+        description: 'Reroll active letters on one face.',
+        discovery: 'You found a Cube Reroll. It is less a tool and more a formal request for the cube to stop being such an alphabet landfill.',
+        usage: 'Not wired as a usable item yet. Soon it will reroll active letters on one face, because therapy was too expensive and violence against vowels was discouraged.'
       },
       multiplierMint: {
         name: 'Multiplier Mint',
-        description: 'Boost the next valid word.'
+        unlockRank: 10,
+        vendorPrice: 400,
+        description: 'Boost the next valid word.',
+        discovery: 'You received a Multiplier Mint. It makes numbers bigger, breath worse, and ethics optional. Finance people call this innovation.',
+        usage: 'Not wired as a usable item yet. Soon it will boost your next valid word, converting minty fraud into SlopCoin.'
       }
     };
 
@@ -737,6 +827,7 @@
     let currentBonusMission = null;
     let pendingRankUpCelebration = null;
     let pendingSwappyPopCelebration = false;
+    let pendingItemUnlockCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -807,6 +898,8 @@
       rankUpModal.setAttribute('aria-hidden', 'true');
       firstSwappyPopModal.classList.remove('open');
       firstSwappyPopModal.setAttribute('aria-hidden', 'true');
+      itemUnlockModal.classList.remove('open');
+      itemUnlockModal.setAttribute('aria-hidden', 'true');
     }
 
     function openMenu(menuName) {
@@ -829,6 +922,39 @@
         journalModal.classList.add('open');
         journalModal.setAttribute('aria-hidden', 'false');
       }
+    }
+
+    function isItemUnlocked(itemKey) {
+      const item = INVENTORY_ITEMS[itemKey];
+      return Boolean(item && rank >= item.unlockRank);
+    }
+
+    function unlockedItemKeys() {
+      return Object.keys(INVENTORY_ITEMS).filter(isItemUnlocked);
+    }
+
+    function randomUnlockedItemKey() {
+      const keys = unlockedItemKeys();
+      return keys[Math.floor(Math.random() * keys.length)] || 'swappyPop';
+    }
+
+    function addRandomUnlockedItem(count = 1) {
+      const itemKey = randomUnlockedItemKey();
+      addInventoryItem(itemKey, count);
+      return itemKey;
+    }
+
+    function shouldShowItemDiscovery(itemKey, previousCount, newCount) {
+      return newCount > 0 && previousCount === 0 && !hasSeenItemDiscovery(itemKey);
+    }
+
+    function discoveredItems() {
+      return lifetimeStats?.itemsDiscovered || {};
+    }
+
+    function hasSeenItemDiscovery(itemKey) {
+      if (itemKey === 'swappyPop') return hasSeenFirstSwappyPop;
+      return Boolean(discoveredItems()[itemKey] > 0);
     }
 
     const ACHIEVEMENT_DEFINITIONS = [
@@ -864,44 +990,7 @@
       }
     ];
 
-    const ITEM_JOURNAL = {
-      swappyPop: {
-        name: 'Swappy Pop',
-        unlocked: () => hasSeenFirstSwappyPop || (inventory.swappyPop || 0) > 0 || lifetimeStats.itemsReceived.swappyPop > 0,
-        description: `A windowless van approaches you offering candy. And just like you did as a kid, you accepted. Except this time they actually do have candy for you. It's a Swappy Pop!`,
-        usage: 'Press I to open Inventory, click Swappy Pop, then click any two active letters on the cube. The letters swap places, one Swappy Pop is consumed, and the cube files another complaint with Human Resources.'
-      },
-      vowelVoucher: {
-        name: 'Vowel Voucher',
-        unlocked: () => (inventory.vowelVoucher || 0) > 0 || lifetimeStats.itemsReceived.vowelVoucher > 0,
-        description: 'A coupon for one vowel, printed on paper so flimsy it has already emotionally given up.',
-        usage: 'Not implemented yet. Eventually this will add one random vowel to a blank space.'
-      },
-      consonantCoupon: {
-        name: 'Consonant Coupon',
-        unlocked: () => (inventory.consonantCoupon || 0) > 0 || lifetimeStats.itemsReceived.consonantCoupon > 0,
-        description: 'A discount consonant from the clearance bin of language. Probably safe. Probably.',
-        usage: 'Not implemented yet. Eventually this will add one random consonant to a blank space.'
-      },
-      letterLeech: {
-        name: 'Letter Leech',
-        unlocked: () => (inventory.letterLeech || 0) > 0 || lifetimeStats.itemsReceived.letterLeech > 0,
-        description: 'A damp little parasite that removes a bad letter and makes eye contact while doing it.',
-        usage: 'Not implemented yet. Eventually this will remove one unwanted active letter.'
-      },
-      cubeReroll: {
-        name: 'Cube Reroll',
-        unlocked: () => (inventory.cubeReroll || 0) > 0 || lifetimeStats.itemsReceived.cubeReroll > 0,
-        description: 'Shake the cube until the alphabet forgets what it was doing.',
-        usage: 'Not implemented yet. Eventually this will reroll active letters on one face.'
-      },
-      multiplierMint: {
-        name: 'Multiplier Mint',
-        unlocked: () => (inventory.multiplierMint || 0) > 0 || lifetimeStats.itemsReceived.multiplierMint > 0,
-        description: 'A mint that makes numbers bigger, breath worse, and ethics optional.',
-        usage: 'Not implemented yet. Eventually this will boost the next valid word.'
-      }
-    };
+    const ITEM_JOURNAL = INVENTORY_ITEMS;
 
     function emptyLengthCounts() {
       const counts = {};
@@ -944,6 +1033,7 @@
         vendorLettersUsed: 0,
         itemsReceived: emptyItemCounts(),
         itemsUsed: emptyItemCounts(),
+        itemsDiscovered: emptyItemCounts(),
         highestSingleWordScore: 0,
         longestWord: 0
       };
@@ -959,7 +1049,8 @@
         wordLengthCounts: { ...base.wordLengthCounts, ...(incoming.wordLengthCounts || {}) },
         gradeCounts: { ...base.gradeCounts, ...(incoming.gradeCounts || {}) },
         itemsReceived: { ...base.itemsReceived, ...(incoming.itemsReceived || {}) },
-        itemsUsed: { ...base.itemsUsed, ...(incoming.itemsUsed || {}) }
+        itemsUsed: { ...base.itemsUsed, ...(incoming.itemsUsed || {}) },
+        itemsDiscovered: { ...base.itemsDiscovered, ...(incoming.itemsDiscovered || {}) }
       };
     }
 
@@ -1022,7 +1113,7 @@
       journalItems.innerHTML = `
         <div class="journal-list">
           ${Object.entries(ITEM_JOURNAL).map(([itemKey, item]) => {
-            const unlocked = item.unlocked();
+            const unlocked = isItemUnlocked(itemKey) || (lifetimeStats.itemsReceived[itemKey] || 0) > 0 || (lifetimeStats.itemsDiscovered[itemKey] || 0) > 0;
             const count = inventory[itemKey] || 0;
             const received = lifetimeStats.itemsReceived[itemKey] || 0;
             const used = lifetimeStats.itemsUsed[itemKey] || 0;
@@ -1031,7 +1122,7 @@
               <div class="journal-item ${unlocked ? '' : 'locked'}">
                 <div class="journal-item-name">${unlocked ? item.name : '???'}</div>
                 <div class="journal-item-body">
-                  ${unlocked ? item.description : 'Undiscovered item. The cube is hiding things because it has trust issues.'}
+                  ${unlocked ? item.discovery : `Unlocks at Rank ${item.unlockRank}. The cube is hiding this one behind a tiny velvet rope made of poor decisions.`}
                   ${unlocked ? `<br><br><strong>How it works:</strong> ${item.usage}` : ''}
                   ${unlocked ? `<br><br><strong>Owned:</strong> ${formatNumber(count)} · <strong>Lifetime received:</strong> ${formatNumber(received)} · <strong>Used:</strong> ${formatNumber(used)}` : ''}
                 </div>
@@ -1498,11 +1589,44 @@
       launchConfetti();
     }
 
+    function showItemUnlockCelebration(itemKey) {
+      const item = INVENTORY_ITEMS[itemKey];
+      if (!item) return;
+
+      if (itemKey === 'swappyPop') {
+        showFirstSwappyPopCelebration();
+        return;
+      }
+
+      closeMenus();
+      itemUnlockName.textContent = item.name.toUpperCase();
+      itemUnlockDescription.textContent = item.discovery;
+      itemUnlockUsage.textContent = item.usage;
+      itemUnlockModal.classList.add('open');
+      itemUnlockModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
     function queueFirstSwappyPopCelebration() {
       if (hasSeenFirstSwappyPop) return;
 
       hasSeenFirstSwappyPop = true;
       pendingSwappyPopCelebration = true;
+      saveGame();
+    }
+
+    function queueItemUnlockCelebration(itemKey) {
+      if (itemKey === 'swappyPop') {
+        queueFirstSwappyPopCelebration();
+        return;
+      }
+
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      if (hasSeenItemDiscovery(itemKey)) return;
+      lifetimeStats.itemsDiscovered[itemKey] = 1;
+
+      if (pendingItemUnlockCelebrations.includes(itemKey)) return;
+      pendingItemUnlockCelebrations.push(itemKey);
       saveGame();
     }
 
@@ -1517,6 +1641,12 @@
       if (pendingSwappyPopCelebration) {
         pendingSwappyPopCelebration = false;
         showFirstSwappyPopCelebration();
+        return true;
+      }
+
+      if (pendingItemUnlockCelebrations.length > 0) {
+        const itemKey = pendingItemUnlockCelebrations.shift();
+        showItemUnlockCelebration(itemKey);
         return true;
       }
 
@@ -1539,13 +1669,16 @@
 
     function addInventoryItem(itemKey, count = 1) {
       inventory = normalizeInventory(inventory);
-      const previousCount = inventory[itemKey] || 0;
-      inventory[itemKey] = previousCount + count;
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
-      lifetimeStats.itemsReceived[itemKey] = (lifetimeStats.itemsReceived[itemKey] || 0) + count;
 
-      if (itemKey === 'swappyPop' && previousCount === 0 && inventory[itemKey] > 0) {
-        queueFirstSwappyPopCelebration();
+      const previousCount = inventory[itemKey] || 0;
+      const previousReceived = lifetimeStats.itemsReceived[itemKey] || 0;
+
+      inventory[itemKey] = previousCount + count;
+      lifetimeStats.itemsReceived[itemKey] = previousReceived + count;
+
+      if (inventory[itemKey] > 0 && previousReceived === 0) {
+        queueItemUnlockCelebration(itemKey);
       }
 
       updateInventoryDisplay();
@@ -1569,6 +1702,8 @@
       inventoryList.innerHTML = '';
 
       for (const [itemKey, item] of Object.entries(INVENTORY_ITEMS)) {
+        if (!isItemUnlocked(itemKey) && (inventory[itemKey] || 0) <= 0) continue;
+
         const count = inventory[itemKey] || 0;
         const row = document.createElement('div');
         row.className = 'inventory-item';
@@ -1587,7 +1722,7 @@
             activateSwappyPop();
             closeMenus();
           } else {
-            setStatus(`${item.name} is in your bag, doing absolutely nothing yet.`);
+            setStatus(`${item.name} is in your bag, but the cube lawyers have not approved its active use yet.`);
           }
         });
 
@@ -1758,13 +1893,20 @@
       const ranksGained = Math.max(0, rank - previousRank);
 
       if (ranksGained > 0) {
+        Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
+          if (previousRank < item.unlockRank && rank >= item.unlockRank && itemKey !== 'swappyPop') {
+            queueItemUnlockCelebration(itemKey);
+          }
+        });
+
         inventory = normalizeInventory(inventory);
         const previousSwappyCount = inventory.swappyPop || 0;
         inventory.swappyPop = previousSwappyCount + ranksGained;
         lifetimeStats = normalizeLifetimeStats(lifetimeStats);
-        lifetimeStats.itemsReceived.swappyPop = (lifetimeStats.itemsReceived.swappyPop || 0) + ranksGained;
+        const previousSwappyReceived = lifetimeStats.itemsReceived.swappyPop || 0;
+        lifetimeStats.itemsReceived.swappyPop = previousSwappyReceived + ranksGained;
 
-        if (previousSwappyCount === 0 && inventory.swappyPop > 0) {
+        if (inventory.swappyPop > 0 && previousSwappyReceived === 0) {
           queueFirstSwappyPopCelebration();
         }
       }
@@ -2673,8 +2815,9 @@
       }
 
       if (grade === 'S' || grade === 'S+') {
-        addInventoryItem('swappyPop', grade === 'S+' ? 2 : 1);
-        rewardText += ` ${grade === 'S+' ? '+2' : '+1'} Swappy Pop reward.`;
+        const rewardCount = grade === 'S+' ? 2 : 1;
+        const rewardItemKey = addRandomUnlockedItem(rewardCount);
+        rewardText += ` +${rewardCount} ${INVENTORY_ITEMS[rewardItemKey].name} reward.`;
       }
 
       const cashoutXPResult = missionXP > 0
@@ -2731,6 +2874,31 @@
       if (pendingVowels === 0) return;
       pendingVowels -= 1;
       updateVendorDisplay();
+    });
+
+    vendorItemList.addEventListener('click', event => {
+      const button = event.target.closest('[data-buy-item]');
+      if (!button || busy) return;
+
+      const itemKey = button.dataset.buyItem;
+      const item = INVENTORY_ITEMS[itemKey];
+
+      if (!item || !isItemUnlocked(itemKey)) return;
+
+      if (bankedScore < item.vendorPrice) {
+        setStatus(`Not enough SlopCoin for ${item.name}. The vendor accepts your poverty as entertainment.`);
+        return;
+      }
+
+      bankedScore -= item.vendorPrice;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.lifetimeSlopCoinSpent += item.vendorPrice;
+
+      addInventoryItem(itemKey, 1);
+      updateScoreDisplay();
+      updateJournalDisplay();
+      setStatus(`Bought ${item.name} for ${item.vendorPrice.toLocaleString()} SlopCoin. The vendor grins like the receipt has teeth.`);
+      showPendingCelebration();
     });
 
     document.getElementById('vendorBuy').addEventListener('click', () => {
