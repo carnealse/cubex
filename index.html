@@ -396,6 +396,55 @@
       font-weight: 700;
       line-height: 1.4;
     }
+    .daily-panel {
+      position: fixed;
+      left: 12px;
+      top: 245px;
+      z-index: 2;
+      width: min(330px, calc(100vw - 24px));
+      display: none;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(114,245,177,.18);
+      background: rgba(14,17,23,.82);
+      box-shadow: 0 14px 40px rgba(0,0,0,.28);
+      backdrop-filter: blur(12px);
+    }
+    .daily-panel.open { display: block; }
+    .daily-panel-title {
+      color: #72f5b1;
+      font-size: 12px;
+      font-weight: 1000;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .daily-word-list { display: grid; gap: 6px; }
+    .daily-word {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      color: #e6eaf0;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .06em;
+    }
+    .daily-word.complete {
+      color: #72f5b1;
+      background: rgba(114,245,177,.1);
+    }
+    .daily-meta, .daily-modal-meta {
+      color: #aab4c5;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .daily-modal-meta {
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -775,6 +824,29 @@
     <div class="game-hint" data-open-menu="inventory">I · Inventory</div>
     <div class="game-hint" data-open-menu="vendor">V · Vendor</div>
     <div class="game-hint" data-open-menu="journal">J · Journal</div>
+    <div class="game-hint" data-open-menu="daily">D · Daily</div>
+  </div>
+
+  <div id="dailyPanel" class="daily-panel" aria-live="polite">
+    <div id="dailyPanelTitle" class="daily-panel-title">Daily Challenge</div>
+    <div id="dailyPanelWords" class="daily-word-list"></div>
+    <div id="dailyPanelMeta" class="daily-meta"></div>
+  </div>
+
+  <div id="dailyModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="dailyTitle">
+      <div class="modal-header">
+        <div id="dailyTitle" class="modal-title">Daily Challenge</div>
+        <button class="modal-close" data-close-modal aria-label="Close daily challenge">×</button>
+      </div>
+
+      <div id="dailyModalMeta" class="daily-modal-meta"></div>
+      <div class="vendor-section-title">Words</div>
+      <div id="dailyModalWords" class="daily-word-list"></div>
+      <div class="vendor-section-title">Reward</div>
+      <div id="dailyModalReward" class="journal-list"></div>
+      <button id="dailyStart" class="vendor-buy">Start Daily Challenge</button>
+    </div>
   </div>
 
   <div id="vendorModal" class="modal-backdrop" aria-hidden="true">
@@ -1081,6 +1153,15 @@
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
+    const dailyModal = document.getElementById('dailyModal');
+    const dailyModalMeta = document.getElementById('dailyModalMeta');
+    const dailyModalWords = document.getElementById('dailyModalWords');
+    const dailyModalReward = document.getElementById('dailyModalReward');
+    const dailyStart = document.getElementById('dailyStart');
+    const dailyPanel = document.getElementById('dailyPanel');
+    const dailyPanelTitle = document.getElementById('dailyPanelTitle');
+    const dailyPanelWords = document.getElementById('dailyPanelWords');
+    const dailyPanelMeta = document.getElementById('dailyPanelMeta');
     const inventoryModal = document.getElementById('inventoryModal');
     const journalModal = document.getElementById('journalModal');
     const journalStats = document.getElementById('journalStats');
@@ -1209,6 +1290,11 @@
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
+    let dailyChallenges = [];
+    let dailyState = null;
+    let dailyMode = false;
+    let activeDailyDay = null;
+    let dailyForcedLetterPool = null;
 
     const LETTER_VALUES = {
       A: 1, E: 1, I: 1, L: 1, N: 1, O: 1, R: 1, S: 1, T: 1, U: 1,
@@ -1280,6 +1366,8 @@
     function closeMenus() {
       vendorModal.classList.remove('open');
       vendorModal.setAttribute('aria-hidden', 'true');
+      dailyModal.classList.remove('open');
+      dailyModal.setAttribute('aria-hidden', 'true');
       inventoryModal.classList.remove('open');
       inventoryModal.setAttribute('aria-hidden', 'true');
       journalModal.classList.remove('open');
@@ -1321,6 +1409,12 @@
         updateJournalDisplay();
         journalModal.classList.add('open');
         journalModal.setAttribute('aria-hidden', 'false');
+      }
+
+      if (menuName === 'daily') {
+        updateDailyDisplay();
+        dailyModal.classList.add('open');
+        dailyModal.setAttribute('aria-hidden', 'false');
       }
     }
 
@@ -3240,6 +3334,207 @@
       return calculatedRank;
     }
 
+
+    function localDateKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function daysBetweenKeys(startKey, endKey) {
+      const [sy, sm, sd] = startKey.split('-').map(Number);
+      const [ey, em, ed] = endKey.split('-').map(Number);
+      const start = Date.UTC(sy, sm - 1, sd);
+      const end = Date.UTC(ey, em - 1, ed);
+      return Math.max(0, Math.floor((end - start) / 86400000));
+    }
+
+    function emptyDailyState() {
+      const today = localDateKey();
+      return {
+        firstPlayDate: today,
+        completedDays: {},
+        progressByDay: {},
+        lastStartedDay: null,
+        lastViewedDay: null
+      };
+    }
+
+    function normalizeDailyState(value) {
+      const base = emptyDailyState();
+      const incoming = value && typeof value === 'object' ? value : {};
+      return {
+        ...base,
+        ...incoming,
+        completedDays: { ...(incoming.completedDays || {}) },
+        progressByDay: { ...(incoming.progressByDay || {}) }
+      };
+    }
+
+    function currentDailyIndex() {
+      dailyState = normalizeDailyState(dailyState);
+      const offset = daysBetweenKeys(dailyState.firstPlayDate, localDateKey());
+      return Math.min(730, offset + 1);
+    }
+
+    function currentDailyChallenge() {
+      if (!dailyChallenges.length) return null;
+      const day = currentDailyIndex();
+      return dailyChallenges.find(challenge => Number(challenge.day) === day) || dailyChallenges[day - 1] || null;
+    }
+
+    function dailyProgressForDay(day) {
+      dailyState = normalizeDailyState(dailyState);
+      const key = String(day);
+      const progress = dailyState.progressByDay[key] || {};
+      dailyState.progressByDay[key] = progress;
+      return progress;
+    }
+
+    function isDailyComplete(day) {
+      dailyState = normalizeDailyState(dailyState);
+      return Boolean(dailyState.completedDays[String(day)]);
+    }
+
+    function rewardName(reward) {
+      if (!reward) return 'Mystery Garbage';
+      if (reward.type === 'item') return `${reward.count || 1} ${INVENTORY_ITEMS[reward.itemKey]?.name || reward.itemKey}`;
+      if (reward.type === 'slopcoin') return `${reward.amount || 0} SlopCoin`;
+      return 'Suspicious Reward';
+    }
+
+    function renderDailyWords(container, challenge, progress) {
+      container.innerHTML = '';
+      if (!challenge) {
+        container.innerHTML = '<div class="daily-meta">No daily challenge loaded. The cube misplaced its calendar and blamed interns.</div>';
+        return;
+      }
+      challenge.words.forEach(word => {
+        const row = document.createElement('div');
+        const complete = Boolean(progress[word]);
+        row.className = `daily-word ${complete ? 'complete' : ''}`;
+        row.innerHTML = `<span>${word}</span><span>${complete ? '✓' : '—'}</span>`;
+        container.appendChild(row);
+      });
+    }
+
+    function updateDailyDisplay() {
+      dailyState = normalizeDailyState(dailyState);
+      const challenge = currentDailyChallenge();
+      if (!challenge) {
+        dailyModalMeta.textContent = 'Daily challenges are not loaded yet. The cube is pretending this is a network strategy.';
+        dailyStart.disabled = true;
+        renderDailyWords(dailyModalWords, null, {});
+        dailyModalReward.innerHTML = '';
+        dailyPanel.classList.remove('open');
+        return;
+      }
+
+      const day = Number(challenge.day);
+      const progress = dailyProgressForDay(day);
+      const complete = isDailyComplete(day);
+      const active = dailyMode && activeDailyDay === day;
+
+      dailyModalMeta.innerHTML = `
+        <strong>${challenge.title}</strong><br>
+        Day ${day} of 730, based on your first play date: ${dailyState.firstPlayDate}.<br>
+        ${challenge.flavor}
+      `;
+
+      renderDailyWords(dailyModalWords, challenge, progress);
+
+      dailyModalReward.innerHTML = (challenge.reward || []).map(reward => `
+        <div class="journal-item">
+          <div class="journal-item-name">${rewardName(reward)}</div>
+          <div class="journal-item-body">Granted when this daily challenge is completed. The reward department insists this is generous and technically not bait.</div>
+        </div>
+      `).join('');
+
+      dailyStart.disabled = complete;
+      dailyStart.textContent = complete ? 'Daily Complete' : active ? 'Restart Daily Challenge' : 'Start Daily Challenge';
+
+      if (active || Object.keys(progress).length) {
+        dailyPanel.classList.add('open');
+        dailyPanelTitle.textContent = `Daily Challenge · Day ${day}`;
+        renderDailyWords(dailyPanelWords, challenge, progress);
+        dailyPanelMeta.textContent = complete
+          ? 'Complete. Rewards will be handled by the next daily system pass.'
+          : 'Spell all three target words. The cube has a clipboard and a personality problem.';
+      } else {
+        dailyPanel.classList.remove('open');
+      }
+    }
+
+    async function loadDailyChallenges() {
+      try {
+        const response = await fetch('daily_challenges.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        dailyChallenges = Array.isArray(data) ? data : [];
+        updateDailyDisplay();
+      } catch (error) {
+        console.warn('Daily challenges failed to load:', error);
+        dailyChallenges = [];
+        updateDailyDisplay();
+      }
+    }
+
+    function buildDailyLetterPool(words) {
+      const pool = [];
+      (Array.isArray(words) ? words : []).forEach(word => {
+        [...String(word).toUpperCase()].forEach(letter => {
+          if (/^[A-Z]$/.test(letter)) pool.push(letter);
+        });
+      });
+      const filler = buildBalancedLetterPool();
+      while (pool.length < 54 && filler.length) pool.push(filler.pop());
+      return shuffle(pool.slice(0, 54));
+    }
+
+    function startDailyChallenge() {
+      const challenge = currentDailyChallenge();
+      if (!challenge || isDailyComplete(challenge.day)) return;
+
+      dailyMode = true;
+      activeDailyDay = Number(challenge.day);
+      dailyState = normalizeDailyState(dailyState);
+      dailyState.lastStartedDay = activeDailyDay;
+      dailyState.lastViewedDay = activeDailyDay;
+      dailyState.progressByDay[String(activeDailyDay)] = dailyState.progressByDay[String(activeDailyDay)] || {};
+      dailyForcedLetterPool = buildDailyLetterPool(challenge.words);
+
+      closeMenus();
+      startFreshRound();
+      saveGame();
+      updateDailyDisplay();
+      setStatus(`Daily Challenge Day ${activeDailyDay} started. Spell ${challenge.words.join(', ')}. The cube is watching with inappropriate confidence.`);
+    }
+
+    function handleDailyAcceptedWord(word) {
+      if (!dailyMode || !activeDailyDay) return;
+      const challenge = dailyChallenges.find(item => Number(item.day) === activeDailyDay);
+      if (!challenge) return;
+
+      const upper = word.toUpperCase();
+      if (!challenge.words.includes(upper)) return;
+
+      const progress = dailyProgressForDay(activeDailyDay);
+      progress[upper] = true;
+
+      const complete = challenge.words.every(target => progress[target]);
+      if (complete) {
+        dailyState.completedDays[String(activeDailyDay)] = { completedAt: new Date().toISOString() };
+        setStatus(`Daily Challenge Day ${activeDailyDay} complete. Reward popup comes next pass. The cube is already polishing the bait.`);
+      } else {
+        setStatus(`Daily word complete: ${upper}. Keep going. The cube remains annoyingly invested.`);
+      }
+
+      saveGame();
+      updateDailyDisplay();
+    }
+
+
     function saveGame() {
       const save = {
         bankedScore,
@@ -3247,6 +3542,7 @@
         rank,
         hasSeenFirstCashout,
         hasSeenFirstSwappyPop,
+        dailyState: normalizeDailyState(dailyState),
         lifetimeStats: normalizeLifetimeStats(lifetimeStats),
         inventory: normalizeInventory(inventory)
       };
@@ -3265,6 +3561,7 @@
         rank = rankFromXP(totalXP);
         hasSeenFirstCashout = Boolean(save.hasSeenFirstCashout);
         hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
+        dailyState = normalizeDailyState(save.dailyState);
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         inventory = normalizeInventory(save.inventory);
 
@@ -3290,6 +3587,7 @@
         bankedScore = 0;
         totalXP = 0;
         rank = 1;
+        dailyState = normalizeDailyState(null);
       }
     }
 
@@ -4388,6 +4686,8 @@
       deactivateInventoryItem('Item use cancelled. The candy returns to your inventory, emotionally sticky but legally intact.');
     });
 
+    dailyStart.addEventListener('click', startDailyChallenge);
+
     document.addEventListener('keydown', event => {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
@@ -4500,6 +4800,7 @@
       lifetimeStats.highestSingleWordScore = Math.max(lifetimeStats.highestSingleWordScore, score.points);
       lifetimeStats.longestWord = Math.max(lifetimeStats.longestWord, word.length);
       recordWordLength(word.length);
+      handleDailyAcceptedWord(word);
 
       updateWordDisplay();
       updateScoreDisplay(score.points);
@@ -4534,7 +4835,8 @@
     function startFreshRound() {
       clearHintStartHighlight();
       clearSelection('Starting a fresh cube.');
-      roundLetterPool = buildBalancedLetterPool();
+      roundLetterPool = dailyForcedLetterPool || buildBalancedLetterPool();
+      dailyForcedLetterPool = null;
       pendingConsonants = 0;
       pendingVowels = 0;
 
@@ -4902,12 +5204,15 @@
     }
 
     loadGame();
+    dailyState = normalizeDailyState(dailyState);
     lifetimeStats = normalizeLifetimeStats(lifetimeStats);
     startNewMissions();
     updateWordDisplay();
     updateScoreDisplay();
     updateVendorDisplay();
     updateInventoryDisplay();
+    updateDailyDisplay();
+    loadDailyChallenges();
     updateCamera();
     animate();
   </script>
