@@ -499,6 +499,48 @@
       font-size: 16px;
       font-weight: 900;
     }
+    .hint-shop-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .hint-shop-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.09);
+    }
+    .hint-shop-name {
+      color: #f7f8fb;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .hint-shop-desc {
+      margin-top: 3px;
+      color: #aeb8c9;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .hint-shop-price {
+      color: #72f5b1;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .hint-result-word {
+      color: #72f5b1;
+      font-size: 28px;
+      font-weight: 1000;
+      text-align: center;
+      letter-spacing: .08em;
+      margin: 10px 0;
+      text-transform: uppercase;
+    }
     .inventory-list {
       margin-top: 8px;
       display: grid;
@@ -621,6 +663,9 @@
       <div class="vendor-section-title">Definitely Legal Items</div>
       <div id="vendorItemList" class="vendor-shop-list"></div>
       <button id="vendorItemBuy" class="vendor-buy">Buy Selected Items</button>
+
+      <div class="vendor-section-title">Paid Hints For Honest Cowards</div>
+      <div id="vendorHintList" class="hint-shop-list"></div>
     </div>
   </div>
 
@@ -651,6 +696,23 @@
       <div id="journalStats" class="journal-section active"></div>
       <div id="journalItems" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
+    </div>
+  </div>
+
+  <div id="hintModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="hintTitle">
+      <div class="modal-header">
+        <div id="hintTitle" class="modal-title">WORD SNIFFER REPORT</div>
+        <button class="modal-close" data-close-modal aria-label="Close hint report">×</button>
+      </div>
+
+      <div id="hintPackageName" class="celebration-title"></div>
+      <div id="hintWord" class="hint-result-word"></div>
+      <div class="celebration-body">
+        <p id="hintResultText"></p>
+        <p id="hintResultSnark"></p>
+      </div>
+      <button class="celebration-button" data-close-modal>Hide The Evidence</button>
     </div>
   </div>
 
@@ -818,6 +880,7 @@
     const consonantQty = document.getElementById('consonantQty');
     const vendorItemList = document.getElementById('vendorItemList');
     const vendorItemBuy = document.getElementById('vendorItemBuy');
+    const vendorHintList = document.getElementById('vendorHintList');
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
@@ -826,6 +889,11 @@
     const journalStats = document.getElementById('journalStats');
     const journalItems = document.getElementById('journalItems');
     const journalAchievements = document.getElementById('journalAchievements');
+    const hintModal = document.getElementById('hintModal');
+    const hintPackageName = document.getElementById('hintPackageName');
+    const hintWord = document.getElementById('hintWord');
+    const hintResultText = document.getElementById('hintResultText');
+    const hintResultSnark = document.getElementById('hintResultSnark');
     const firstCashoutModal = document.getElementById('firstCashoutModal');
     const rankUpModal = document.getElementById('rankUpModal');
     const firstSwappyPopModal = document.getElementById('firstSwappyPopModal');
@@ -916,6 +984,7 @@
     let activeSwapFirstSticker = null;
     let pendingItemPurchases = {};
     let nextWordMultiplier = 1;
+    let hintedStartSticker = null;
     let currentMainMission = null;
     let currentBonusMission = null;
     let failedMissionIds = new Set();
@@ -997,6 +1066,8 @@
       inventoryModal.setAttribute('aria-hidden', 'true');
       journalModal.classList.remove('open');
       journalModal.setAttribute('aria-hidden', 'true');
+      hintModal.classList.remove('open');
+      hintModal.setAttribute('aria-hidden', 'true');
       firstCashoutModal.classList.remove('open');
       firstCashoutModal.setAttribute('aria-hidden', 'true');
       rankUpModal.classList.remove('open');
@@ -1077,6 +1148,55 @@
       return Boolean(discoveredItems()[itemKey] > 0);
     }
 
+    const HINT_PACKAGES = {
+      hopeDetector: {
+        name: 'Hope Detector',
+        unlockRank: 3,
+        price: 5,
+        description: 'Tells the longest solvable word length.',
+        snark: 'The vendor releases a damp little optimism ferret. It sniffs the cube and confirms whether hope is still legally present.'
+      },
+      firstLetterLeak: {
+        name: 'First Letter Leak',
+        unlockRank: 4,
+        price: 15,
+        description: 'Tells longest solvable word length and reveals the first letter.',
+        snark: 'A tiny intern in a wrinkled suit leaks one letter, then immediately updates their LinkedIn.'
+      },
+      corporateNudge: {
+        name: 'Corporate Nudge',
+        unlockRank: 6,
+        price: 30,
+        description: 'Tells longest solvable word length and reveals first and last letters.',
+        snark: 'A consultant arrives, says something obvious with confidence, invoices the cube, and leaves.'
+      },
+      pathSniffer: {
+        name: 'Path Sniffer',
+        unlockRank: 8,
+        price: 40,
+        description: 'Adds how many faces the longest word crosses.',
+        snark: 'The Word Sniffer presses its wet little nose against the cube and makes a noise that sounds like billable hours.'
+      },
+      executiveCheat: {
+        name: 'Executive Cheating Package',
+        unlockRank: 10,
+        price: 150,
+        description: 'Reveals the word and highlights the starting tile. Does not show the path.',
+        snark: 'Congratulations. You bought the executive package, where success is not earned, it is expensed.'
+      }
+    };
+
+    function availableHintPackages() {
+      return Object.entries(HINT_PACKAGES).filter(([, hint]) => rank >= hint.unlockRank);
+    }
+
+    function clearHintStartHighlight() {
+      if (!hintedStartSticker) return;
+      hintedStartSticker.userData.hintStart = false;
+      refreshStickerTexture(hintedStartSticker);
+      hintedStartSticker = null;
+    }
+
     const ACHIEVEMENT_DEFINITIONS = [
       {
         id: 'first_cashout',
@@ -1143,6 +1263,8 @@
         lifetimeSlopCoinEarned: 0,
         lifetimeSlopCoinSpent: 0,
         lifetimeXPEarned: 0,
+        hintsBought: 0,
+        lifetimeHintSpend: 0,
         totalCashouts: 0,
         abandonedRounds: 0,
         contractsCompleted: 0,
@@ -1210,6 +1332,8 @@
         <div class="journal-grid">
           ${statCard('Lifetime SlopCoin Earned', lifetimeStats.lifetimeSlopCoinEarned, 'Gross domestic product of your personal trash economy.')}
           ${statCard('Lifetime SlopCoin Spent', lifetimeStats.lifetimeSlopCoinSpent, 'You gave it to the vendor. The vendor is not your friend.')}
+          ${statCard('Hints Bought', lifetimeStats.hintsBought, 'Times you paid for hope because effort had become emotionally unavailable.')}
+          ${statCard('SlopCoin Spent On Hints', lifetimeStats.lifetimeHintSpend, 'Money burned at the altar of executive convenience.')}
           ${statCard('Valid Words', lifetimeStats.validWordsSubmitted, 'Actual words. Legally impressive.')}
           ${statCard('Illegal Word Attempts', lifetimeStats.invalidWordsSubmitted, 'Nice try, dictionary felon.')}
           ${statCard('Cash Outs', lifetimeStats.totalCashouts, 'Times you converted effort into SlopCoin and shame.')}
@@ -2337,6 +2461,7 @@
         : `Buy Letters · ${cost} SlopCoin`;
 
       updateVendorItemShop();
+      updateVendorHintShop();
     }
 
     function updateVendorItemShop() {
@@ -2387,6 +2512,44 @@
         : `Buy ${selectedItems.toLocaleString()} Item${selectedItems === 1 ? '' : 's'} · ${totalCost.toLocaleString()} SlopCoin`;
     }
 
+    function updateVendorHintShop() {
+      vendorHintList.innerHTML = '';
+
+      const available = availableHintPackages();
+
+      available.forEach(([hintKey, hint]) => {
+        const canAfford = bankedScore >= hint.price;
+        const row = document.createElement('div');
+        row.className = 'hint-shop-item';
+        row.innerHTML = `
+          <div>
+            <div class="hint-shop-name">${hint.name}</div>
+            <div class="hint-shop-desc">${hint.description}</div>
+          </div>
+          <div>
+            <div class="hint-shop-price">${hint.price.toLocaleString()} SlopCoin</div>
+            <button ${canAfford ? '' : 'disabled'} data-buy-hint="${hintKey}">Buy</button>
+          </div>
+        `;
+
+        vendorHintList.appendChild(row);
+      });
+
+      if (!vendorHintList.children.length) {
+        const nextHint = Object.values(HINT_PACKAGES)
+          .filter(hint => rank < hint.unlockRank)
+          .sort((a, b) => a.unlockRank - b.unlockRank)[0];
+
+        vendorHintList.innerHTML = `
+          <div class="journal-card-text">
+            No hint packages unlocked yet. ${nextHint
+              ? `${nextHint.name} unlocks at Rank ${nextHint.unlockRank}.`
+              : 'The vendor has run out of ways to monetize your confusion, which feels temporary.'}
+          </div>
+        `;
+      }
+    }
+
     function randomVowel() {
       return weightedRandomLetter(VOWEL_COUNTS);
     }
@@ -2407,6 +2570,184 @@
       sticker.userData.used = false;
       sticker.visible = true;
       refreshStickerTexture(sticker);
+    }
+
+    let hintTrie = null;
+
+    function buildHintTrie() {
+      const root = { children: new Map(), word: null };
+
+      for (const word of ALLOWED_WORDS) {
+        if (word.length < 2 || word.length > 18) continue;
+
+        let node = root;
+        for (const letter of word.toUpperCase()) {
+          if (!node.children.has(letter)) {
+            node.children.set(letter, { children: new Map(), word: null });
+          }
+          node = node.children.get(letter);
+        }
+
+        node.word = word.toUpperCase();
+      }
+
+      return root;
+    }
+
+    function activeHintTiles() {
+      return stickers.filter(sticker =>
+        sticker.visible &&
+        !sticker.userData.used &&
+        typeof sticker.userData.letter === 'string' &&
+        sticker.userData.letter.length === 1
+      );
+    }
+
+    function buildHintGraph(nodes) {
+      return nodes.map((node, index) => {
+        const neighbors = [];
+
+        nodes.forEach((candidate, candidateIndex) => {
+          if (index !== candidateIndex && areAdjacent(node, candidate)) {
+            neighbors.push(candidateIndex);
+          }
+        });
+
+        return neighbors;
+      });
+    }
+
+    function hintFacesForPath(path) {
+      return new Set(path.map(sticker => faceKeyFromNormal(worldNormalForSticker(sticker)))).size;
+    }
+
+    function solveLongestPlayableWord() {
+      if (!hintTrie) hintTrie = buildHintTrie();
+
+      const nodes = activeHintTiles();
+      const graph = buildHintGraph(nodes);
+      let best = null;
+
+      function consider(word, path) {
+        const faces = hintFacesForPath(path);
+        const points = calculateWordScore(word.toLowerCase()).points;
+
+        if (
+          !best ||
+          word.length > best.word.length ||
+          (word.length === best.word.length && points > best.points)
+        ) {
+          best = {
+            word,
+            path: [...path],
+            points,
+            faces
+          };
+        }
+      }
+
+      function dfs(nodeIndex, trieNode, visited, path) {
+        const sticker = nodes[nodeIndex];
+        const letter = sticker.userData.letter.toUpperCase();
+        const nextTrieNode = trieNode.children.get(letter);
+
+        if (!nextTrieNode) return;
+
+        visited.add(nodeIndex);
+        path.push(sticker);
+
+        if (nextTrieNode.word) consider(nextTrieNode.word, path);
+
+        for (const neighborIndex of graph[nodeIndex]) {
+          if (!visited.has(neighborIndex)) {
+            dfs(neighborIndex, nextTrieNode, visited, path);
+          }
+        }
+
+        path.pop();
+        visited.delete(nodeIndex);
+      }
+
+      nodes.forEach((_, index) => {
+        dfs(index, hintTrie, new Set(), []);
+      });
+
+      return best;
+    }
+
+    function hintReportText(hintKey, result) {
+      if (!result) {
+        return 'The solver found no playable words on the current cube. Either the board is dead, the dictionary is being dramatic, or both.';
+      }
+
+      const first = result.word[0];
+      const last = result.word[result.word.length - 1];
+
+      if (hintKey === 'hopeDetector') {
+        return `The longest currently solvable word is ${result.word.length} letters long. No, we are not telling you the word. This is the cheap package.`;
+      }
+
+      if (hintKey === 'firstLetterLeak') {
+        return `The longest currently solvable word is ${result.word.length} letters long and starts with ${first}. One letter leaked. Someone in compliance is sweating.`;
+      }
+
+      if (hintKey === 'corporateNudge') {
+        return `The longest currently solvable word is ${result.word.length} letters long. It starts with ${first} and ends with ${last}. You paid for a nudge. You received a nudge. Capitalism is satisfied.`;
+      }
+
+      if (hintKey === 'pathSniffer') {
+        return `The longest currently solvable word is ${result.word.length} letters long. It starts with ${first}, ends with ${last}, and crosses ${result.faces} face${result.faces === 1 ? '' : 's'}. The sniffer is damp but effective.`;
+      }
+
+      return `The longest currently solvable word is ${result.word.length} letters long. The word is revealed below. The starting tile is highlighted. The rest is still your problem, Executive.`;
+    }
+
+    function showHintResult(hintKey, result) {
+      const hint = HINT_PACKAGES[hintKey];
+
+      hintPackageName.textContent = hint.name.toUpperCase();
+      hintResultText.textContent = hintReportText(hintKey, result);
+      hintResultSnark.textContent = hint.snark;
+
+      hintWord.textContent = hintKey === 'executiveCheat' && result
+        ? result.word
+        : '';
+
+      hintModal.classList.add('open');
+      hintModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function buyHint(hintKey) {
+      const hint = HINT_PACKAGES[hintKey];
+      if (!hint || rank < hint.unlockRank) return;
+
+      if (bankedScore < hint.price) {
+        setStatus(`Not enough SlopCoin for ${hint.name}. The vendor hates your liquidity profile.`);
+        updateVendorDisplay();
+        return;
+      }
+
+      clearHintStartHighlight();
+
+      bankedScore -= hint.price;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.lifetimeSlopCoinSpent += hint.price;
+      lifetimeStats.hintsBought += 1;
+      lifetimeStats.lifetimeHintSpend += hint.price;
+
+      const result = solveLongestPlayableWord();
+
+      if (hintKey === 'executiveCheat' && result?.path?.[0]) {
+        hintedStartSticker = result.path[0];
+        hintedStartSticker.userData.hintStart = true;
+        refreshStickerTexture(hintedStartSticker);
+      }
+
+      updateScoreDisplay();
+      updateJournalDisplay();
+      closeMenus();
+      showHintResult(hintKey, result);
+      saveGame();
     }
 
     function setStatus(message) {
@@ -2492,7 +2833,7 @@
       return '#111318';
     }
 
-    function createLetterTexture(color, letter, selected = false) {
+    function createLetterTexture(color, letter, selected = false, hintStart = false) {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 256;
@@ -2500,6 +2841,16 @@
 
       ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
       ctx.fillRect(0, 0, 256, 256);
+
+      if (hintStart) {
+        ctx.strokeStyle = '#f0d520';
+        ctx.lineWidth = 22;
+        ctx.strokeRect(8, 8, 240, 240);
+        ctx.beginPath();
+        ctx.arc(218, 38, 18, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0d520';
+        ctx.fill();
+      }
 
       if (selected) {
         ctx.strokeStyle = '#72f5b1';
@@ -2547,7 +2898,8 @@
         : createLetterTexture(
             sticker.userData.color,
             sticker.userData.letter,
-            sticker.userData.selected
+            sticker.userData.selected,
+            sticker.userData.hintStart
           );
 
       sticker.material.opacity = sticker.userData.used ? 0.9 : 1;
@@ -2604,6 +2956,7 @@
       sticker.userData.selected = false;
       sticker.userData.used = false;
       sticker.userData.source = 'random';
+      sticker.userData.hintStart = false;
       sticker.userData.cubie = cubie;
 
       cubie.add(sticker);
@@ -2821,6 +3174,11 @@
       if (previous && !areAdjacent(previous, sticker)) {
         setStatus('That letter is not adjacent to the end of the chain.');
         return;
+      }
+
+      if (sticker.userData.hintStart) {
+        sticker.userData.hintStart = false;
+        if (hintedStartSticker === sticker) hintedStartSticker = null;
       }
 
       selectedStickers.push(sticker);
@@ -3198,6 +3556,7 @@
     });
 
     function startFreshRound() {
+      clearHintStartHighlight();
       clearSelection('Starting a fresh cube.');
       roundLetterPool = buildBalancedLetterPool();
       pendingConsonants = 0;
@@ -3219,6 +3578,7 @@
         sticker.userData.selected = false;
         sticker.userData.used = false;
         sticker.userData.source = 'random';
+        sticker.userData.hintStart = false;
         sticker.visible = true;
         refreshStickerTexture(sticker);
       });
@@ -3356,6 +3716,12 @@
       if (pendingVowels === 0) return;
       pendingVowels -= 1;
       updateVendorDisplay();
+    });
+
+    vendorHintList.addEventListener('click', event => {
+      const button = event.target.closest('[data-buy-hint]');
+      if (!button || busy) return;
+      buyHint(button.dataset.buyHint);
     });
 
     vendorItemList.addEventListener('click', event => {
