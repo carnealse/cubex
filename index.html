@@ -96,6 +96,9 @@
       font-size: 12px;
       font-weight: 900;
     }
+    .mission-progress.failed {
+      color: #ff5d5d;
+    }
     .mission-bonus {
       margin-top: 10px;
       padding-top: 9px;
@@ -914,6 +917,7 @@
     let pendingItemPurchases = {};
     let currentMainMission = null;
     let currentBonusMission = null;
+    let failedMissionIds = new Set();
     let pendingRankUpCelebration = null;
     let pendingSwappyPopCelebration = false;
     let pendingItemUnlockCelebrations = [];
@@ -1142,6 +1146,7 @@
         abandonedRounds: 0,
         contractsCompleted: 0,
         bonusContractsCompleted: 0,
+        bonusContractsFailed: 0,
         tilesCleared: 0,
         rareLettersUsed: 0,
         swappyPopsUsed: 0,
@@ -1210,6 +1215,7 @@
           ${statCard('Abandoned Rounds', lifetimeStats.abandonedRounds, 'Times you found the emergency exit and called it strategy.')}
           ${statCard('Contracts Completed', lifetimeStats.contractsCompleted, 'Main objectives beaten into submission.')}
           ${statCard('Bonus Contracts', lifetimeStats.bonusContractsCompleted, 'Extra credit, but make it morally damp.')}
+          ${statCard('Failed Bonus Contracts', lifetimeStats.bonusContractsFailed, 'Optional objectives you personally escorted into a ditch.')}
           ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Letters removed from cube society.')}
           ${statCard('Rare Letters Used', lifetimeStats.rareLettersUsed, 'Q, X, Z, and J. The alphabet problem children.')}
           ${statCard('Vendor Letters Bought', lifetimeStats.vendorLettersBought, 'Purchased from a suspicious menu with no refund policy.')}
@@ -1302,7 +1308,37 @@
     }
 
     function isMissionComplete(mission) {
+      if (isMissionFailed(mission)) return false;
       return missionProgressValue(mission) >= mission.target;
+    }
+
+    function isMissionFailed(mission) {
+      return Boolean(mission && failedMissionIds.has(mission.id));
+    }
+
+    const MISSION_FAILURE_COMMENTS = [
+      'Bonus contract failed. The dictionary saw what you tried to sneak past it, and now it wants a shower.',
+      'FAILED. That was not a word. That was alphabet soup having a medical event.',
+      'Bonus ruined. The cube asked for literacy and you delivered keyboard roadkill.',
+      'FAILED. Somewhere, a spelling bee champion just woke up screaming.',
+      'Bonus contract dead. You stabbed it with nonsense and then acted surprised.',
+      'FAILED. The cube has reported your submission to the Department of Suspicious Mouth Sounds.',
+      'Bonus failed. Your word looked like a raccoon walked across a keyboard during a tax audit.',
+      'FAILED. That was not language. That was a cry for help wearing letters.',
+      'Bonus contract terminated. Cause of death: dictionary fraud.',
+      'FAILED. You attempted to launder garbage through the alphabet and got caught.'
+    ];
+
+    function randomMissionFailureComment() {
+      return MISSION_FAILURE_COMMENTS[Math.floor(Math.random() * MISSION_FAILURE_COMMENTS.length)];
+    }
+
+    function failCleanWordMissions() {
+      [currentMainMission, currentBonusMission].forEach(mission => {
+        if (mission && mission.stat === 'cleanWords' && !isMissionComplete(mission)) {
+          failedMissionIds.add(mission.id);
+        }
+      });
     }
 
     function missionProgressText(mission) {
@@ -1422,15 +1458,6 @@
       if (tier >= 4) {
         main.push(
           {
-            id: 'clean_words',
-            stat: 'cleanWords',
-            name: 'No Take Backs',
-            target: Math.min(10, 4 + Math.floor(rank / 4)),
-            unit: ' clean words',
-            rewardXP: 175 + rank * 20,
-            flavor: 'Submit valid words with no invalid junk. Weirdly competent. Suspicious.'
-          },
-          {
             id: 'swappy_use',
             stat: 'swappyUsed',
             name: 'Candy-Based Logistics',
@@ -1532,9 +1559,16 @@
 
     function startNewMissions() {
       roundStats = emptyRoundStats();
+      failedMissionIds = new Set();
       currentMainMission = pickRandomMission('main');
       currentBonusMission = pickRandomMission('bonus', currentMainMission.id);
       updateMissionDisplay();
+    }
+
+    function missionDisplayText(mission) {
+      if (isMissionFailed(mission)) return `${missionProgressText(mission)} · FAILED`;
+      if (isMissionComplete(mission)) return `${missionProgressText(mission)} · COMPLETE`;
+      return missionProgressText(mission);
     }
 
     function updateMissionDisplay() {
@@ -1542,13 +1576,13 @@
 
       mainMissionName.textContent = currentMainMission.name;
       mainMissionFlavor.textContent = currentMainMission.flavor;
-      mainMissionProgress.textContent =
-        `${missionProgressText(currentMainMission)}${isMissionComplete(currentMainMission) ? ' · COMPLETE' : ''}`;
+      mainMissionProgress.textContent = missionDisplayText(currentMainMission);
+      mainMissionProgress.classList.toggle('failed', isMissionFailed(currentMainMission));
 
       bonusMissionName.textContent = currentBonusMission.name;
       bonusMissionFlavor.textContent = currentBonusMission.flavor;
-      bonusMissionProgress.textContent =
-        `${missionProgressText(currentBonusMission)}${isMissionComplete(currentBonusMission) ? ' · COMPLETE' : ''}`;
+      bonusMissionProgress.textContent = missionDisplayText(currentBonusMission);
+      bonusMissionProgress.classList.toggle('failed', isMissionFailed(currentBonusMission));
 
       const cashOutButton = document.getElementById('cashOut');
       if (cashOutButton) {
@@ -2913,9 +2947,10 @@
         roundStats.cleanWords = 0;
         lifetimeStats = normalizeLifetimeStats(lifetimeStats);
         lifetimeStats.invalidWordsSubmitted += 1;
+        failCleanWordMissions();
         updateMissionDisplay();
         saveGame();
-        clearSelection(`"${word.toUpperCase()}" is not in the allowed word list.`);
+        clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${randomMissionFailureComment()}`);
         return;
       }
 
@@ -3051,6 +3086,7 @@
       lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
       if (mainComplete) lifetimeStats.contractsCompleted += 1;
       if (bonusComplete) lifetimeStats.bonusContractsCompleted += 1;
+      if (isMissionFailed(currentBonusMission)) lifetimeStats.bonusContractsFailed += 1;
 
       let missionXP = 0;
       let rewardText = '';
