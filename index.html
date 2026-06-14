@@ -734,11 +734,13 @@
       <div class="journal-tabs">
         <button class="journal-tab active" data-journal-tab="stats">Stats</button>
         <button class="journal-tab" data-journal-tab="items">Items</button>
+        <button class="journal-tab" data-journal-tab="hints">Hints</button>
         <button class="journal-tab" data-journal-tab="achievements">Achievements</button>
       </div>
 
       <div id="journalStats" class="journal-section active"></div>
       <div id="journalItems" class="journal-section"></div>
+      <div id="journalHints" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
     </div>
   </div>
@@ -757,6 +759,22 @@
       <div id="roundRecapGrid" class="recap-grid"></div>
       <div id="roundRecapDetails" class="recap-list"></div>
       <button class="celebration-button" data-close-modal>Accept This Fiscal Autopsy</button>
+    </div>
+  </div>
+
+  <div id="hintUnlockModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="hintUnlockTitle">
+      <div class="modal-header">
+        <div id="hintUnlockTitle" class="modal-title">NEW VENDOR SERVICE UNLOCKED!</div>
+        <button class="modal-close" data-close-modal aria-label="Close hint unlock">×</button>
+      </div>
+
+      <div id="hintUnlockName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="hintUnlockDescription"></p>
+        <p id="hintUnlockUsage"></p>
+      </div>
+      <button class="celebration-button" data-close-modal>Accept This Consulting Product</button>
     </div>
   </div>
 
@@ -949,8 +967,13 @@
     const journalModal = document.getElementById('journalModal');
     const journalStats = document.getElementById('journalStats');
     const journalItems = document.getElementById('journalItems');
+    const journalHints = document.getElementById('journalHints');
     const journalAchievements = document.getElementById('journalAchievements');
     const roundRecapModal = document.getElementById('roundRecapModal');
+    const hintUnlockModal = document.getElementById('hintUnlockModal');
+    const hintUnlockName = document.getElementById('hintUnlockName');
+    const hintUnlockDescription = document.getElementById('hintUnlockDescription');
+    const hintUnlockUsage = document.getElementById('hintUnlockUsage');
     const roundRecapGrade = document.getElementById('roundRecapGrade');
     const roundRecapSnark = document.getElementById('roundRecapSnark');
     const roundRecapGrid = document.getElementById('roundRecapGrid');
@@ -1057,6 +1080,7 @@
     let pendingRankUpCelebration = null;
     let pendingSwappyPopCelebration = false;
     let pendingItemUnlockCelebrations = [];
+    let pendingHintUnlockCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -1137,6 +1161,8 @@
       journalModal.setAttribute('aria-hidden', 'true');
       roundRecapModal.classList.remove('open');
       roundRecapModal.setAttribute('aria-hidden', 'true');
+      hintUnlockModal.classList.remove('open');
+      hintUnlockModal.setAttribute('aria-hidden', 'true');
       hintModal.classList.remove('open');
       hintModal.setAttribute('aria-hidden', 'true');
       firstCashoutModal.classList.remove('open');
@@ -1268,6 +1294,39 @@
       hintedStartSticker = null;
     }
 
+    function hasSeenHintDiscovery(hintKey) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      return Boolean(lifetimeStats.hintsDiscovered[hintKey]);
+    }
+
+    function queueHintUnlockCelebration(hintKey) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      if (hasSeenHintDiscovery(hintKey)) return;
+
+      lifetimeStats.hintsDiscovered[hintKey] = 1;
+
+      if (!pendingHintUnlockCelebrations.includes(hintKey)) {
+        pendingHintUnlockCelebrations.push(hintKey);
+      }
+
+      saveGame();
+    }
+
+    function showHintUnlockCelebration(hintKey) {
+      const hint = HINT_PACKAGES[hintKey];
+      if (!hint) return;
+
+      closeMenus();
+      hintUnlockName.textContent = hint.name.toUpperCase();
+      hintUnlockDescription.textContent =
+        `${hint.name} is now available at the vendor for ${hint.price.toLocaleString()} SlopCoin. ${hint.description}`;
+      hintUnlockUsage.textContent =
+        `${hint.snark} This is not an item. It is a paid service, which means the vendor can charge you repeatedly and call it innovation.`;
+      hintUnlockModal.classList.add('open');
+      hintUnlockModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
     const ACHIEVEMENT_DEFINITIONS = [
       {
         id: 'first_cashout',
@@ -1350,6 +1409,7 @@
         itemsReceived: emptyItemCounts(),
         itemsUsed: emptyItemCounts(),
         itemsDiscovered: emptyItemCounts(),
+        hintsDiscovered: {},
         highestSingleWordScore: 0,
         longestWord: 0
       };
@@ -1366,7 +1426,8 @@
         gradeCounts: { ...base.gradeCounts, ...(incoming.gradeCounts || {}) },
         itemsReceived: { ...base.itemsReceived, ...(incoming.itemsReceived || {}) },
         itemsUsed: { ...base.itemsUsed, ...(incoming.itemsUsed || {}) },
-        itemsDiscovered: { ...base.itemsDiscovered, ...(incoming.itemsDiscovered || {}) }
+        itemsDiscovered: { ...base.itemsDiscovered, ...(incoming.itemsDiscovered || {}) },
+        hintsDiscovered: { ...(incoming.hintsDiscovered || {}) }
       };
     }
 
@@ -1446,6 +1507,25 @@
                   ${unlocked ? item.discovery : `Unlocks at Rank ${item.unlockRank}. The cube is hiding this one behind a tiny velvet rope made of poor decisions.`}
                   ${unlocked ? `<br><br><strong>How it works:</strong> ${item.usage}` : ''}
                   ${unlocked ? `<br><br><strong>Owned:</strong> ${formatNumber(count)} · <strong>Lifetime received:</strong> ${formatNumber(received)} · <strong>Used:</strong> ${formatNumber(used)}` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      journalHints.innerHTML = `
+        <div class="journal-list">
+          ${Object.entries(HINT_PACKAGES).map(([hintKey, hint]) => {
+            const unlocked = rank >= hint.unlockRank || Boolean(lifetimeStats.hintsDiscovered[hintKey]);
+
+            return `
+              <div class="journal-item ${unlocked ? '' : 'locked'}">
+                <div class="journal-item-name">${unlocked ? hint.name : 'Locked Hint Package'}</div>
+                <div class="journal-item-body">
+                  ${unlocked
+                    ? `${hint.description}<br><br><strong>Vendor price:</strong> ${hint.price.toLocaleString()} SlopCoin<br><br>${hint.snark}`
+                    : `Unlocks at Rank ${hint.unlockRank}. The vendor is still workshopping how to monetize this specific flavor of confusion.`}
                 </div>
               </div>
             `;
@@ -2125,6 +2205,12 @@
         return true;
       }
 
+      if (pendingHintUnlockCelebrations.length > 0) {
+        const hintKey = pendingHintUnlockCelebrations.shift();
+        showHintUnlockCelebration(hintKey);
+        return true;
+      }
+
       return false;
     }
 
@@ -2530,10 +2616,22 @@
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         inventory = normalizeInventory(save.inventory);
 
-        Object.keys(INVENTORY_ITEMS).forEach(itemKey => {
+        Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
           if ((inventory[itemKey] || 0) > 0) {
             lifetimeStats.itemsReceived[itemKey] = Math.max(lifetimeStats.itemsReceived[itemKey] || 0, inventory[itemKey]);
             lifetimeStats.itemsDiscovered[itemKey] = 1;
+          }
+
+          if (rank >= item.unlockRank && (lifetimeStats.itemsReceived[itemKey] || 0) === 0) {
+            inventory[itemKey] = (inventory[itemKey] || 0) + 1;
+            lifetimeStats.itemsReceived[itemKey] = 1;
+            lifetimeStats.itemsDiscovered[itemKey] = 1;
+          }
+        });
+
+        Object.entries(HINT_PACKAGES).forEach(([hintKey, hint]) => {
+          if (rank >= hint.unlockRank && !lifetimeStats.hintsDiscovered[hintKey]) {
+            lifetimeStats.hintsDiscovered[hintKey] = 1;
           }
         });
       } catch {
@@ -2571,7 +2669,13 @@
       if (ranksGained > 0) {
         Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
           if (previousRank < item.unlockRank && rank >= item.unlockRank && itemKey !== 'swappyPop') {
-            queueItemUnlockCelebration(itemKey);
+            addInventoryItem(itemKey, 1);
+          }
+        });
+
+        Object.entries(HINT_PACKAGES).forEach(([hintKey, hint]) => {
+          if (previousRank < hint.unlockRank && rank >= hint.unlockRank) {
+            queueHintUnlockCelebration(hintKey);
           }
         });
 
