@@ -652,6 +652,7 @@
   <div class="controls">
     <button id="submit">Submit</button>
     <button id="cashOut" title="Locked until the main contract is complete. SlopCoin is fake, but standards are somehow real.">Cash Out</button>
+    <button id="abandonRound" title="Give up, lose this round's progress, and get a fresh cube. The cube will remember emotionally, not legally.">Abandon Round</button>
     <button id="clear">Clear</button>
     <button id="scramble">Scramble</button>
   </div>
@@ -880,6 +881,17 @@
 
       document.getElementById('cashOut').disabled = totalScore === 0 || !mainComplete;
 
+      const hasRoundProgress =
+        totalScore > 0 ||
+        (roundStats && (
+          roundStats.validWords > 0 ||
+          roundStats.invalidWords > 0 ||
+          roundStats.tilesCleared > 0 ||
+          roundStats.swappyUsed > 0
+        ));
+
+      document.getElementById('abandonRound').disabled = !hasRoundProgress;
+
       updateRankDisplay();
       updateVendorDisplay();
       updateInventoryDisplay();
@@ -929,8 +941,19 @@
       return Boolean(item && rank >= item.unlockRank);
     }
 
+    function isItemAvailableForVendor(itemKey) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+
+      return (
+        isItemUnlocked(itemKey) ||
+        (inventory[itemKey] || 0) > 0 ||
+        (lifetimeStats.itemsReceived[itemKey] || 0) > 0 ||
+        (lifetimeStats.itemsDiscovered[itemKey] || 0) > 0
+      );
+    }
+
     function unlockedItemKeys() {
-      return Object.keys(INVENTORY_ITEMS).filter(isItemUnlocked);
+      return Object.keys(INVENTORY_ITEMS).filter(isItemAvailableForVendor);
     }
 
     function randomUnlockedItemKey() {
@@ -1024,6 +1047,7 @@
         lifetimeSlopCoinSpent: 0,
         lifetimeXPEarned: 0,
         totalCashouts: 0,
+        abandonedRounds: 0,
         contractsCompleted: 0,
         bonusContractsCompleted: 0,
         tilesCleared: 0,
@@ -1091,6 +1115,7 @@
           ${statCard('Valid Words', lifetimeStats.validWordsSubmitted, 'Actual words. Legally impressive.')}
           ${statCard('Illegal Word Attempts', lifetimeStats.invalidWordsSubmitted, 'Nice try, dictionary felon.')}
           ${statCard('Cash Outs', lifetimeStats.totalCashouts, 'Times you converted effort into SlopCoin and shame.')}
+          ${statCard('Abandoned Rounds', lifetimeStats.abandonedRounds, 'Times you found the emergency exit and called it strategy.')}
           ${statCard('Contracts Completed', lifetimeStats.contractsCompleted, 'Main objectives beaten into submission.')}
           ${statCard('Bonus Contracts', lifetimeStats.bonusContractsCompleted, 'Extra credit, but make it morally damp.')}
           ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Letters removed from cube society.')}
@@ -2780,6 +2805,39 @@
       startNewMissions();
     }
 
+    document.getElementById('abandonRound').addEventListener('click', () => {
+      if (busy) return;
+
+      const hadProgress =
+        totalScore > 0 ||
+        (roundStats && (
+          roundStats.validWords > 0 ||
+          roundStats.invalidWords > 0 ||
+          roundStats.tilesCleared > 0 ||
+          roundStats.swappyUsed > 0
+        ));
+
+      if (!hadProgress) return;
+
+      const lostSlopCoin = totalScore;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.abandonedRounds += 1;
+
+      totalScore = 0;
+      pendingConsonants = 0;
+      pendingVowels = 0;
+
+      deactivateInventoryItem();
+      startFreshRound();
+      saveGame();
+      updateScoreDisplay();
+      updateJournalDisplay();
+
+      setStatus(
+        `Round abandoned. ${lostSlopCoin.toLocaleString()} SlopCoin evaporated into the shame vents. Fresh cube loaded. Nobody clapped.`
+      );
+    });
+
     document.getElementById('cashOut').addEventListener('click', () => {
       if (busy || totalScore === 0) return;
 
@@ -2883,7 +2941,7 @@
       const itemKey = button.dataset.buyItem;
       const item = INVENTORY_ITEMS[itemKey];
 
-      if (!item || !isItemUnlocked(itemKey)) return;
+      if (!item || !isItemAvailableForVendor(itemKey)) return;
 
       if (bankedScore < item.vendorPrice) {
         setStatus(`Not enough SlopCoin for ${item.name}. The vendor accepts your poverty as entertainment.`);
