@@ -177,6 +177,79 @@
       font-weight: 800;
       backdrop-filter: blur(10px);
     }
+    .journal-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .journal-tab {
+      padding: 7px 10px !important;
+      border-radius: 999px !important;
+      font-size: 12px;
+    }
+    .journal-tab.active {
+      background: #72f5b1;
+      color: #111318;
+    }
+    .journal-section {
+      display: none;
+    }
+    .journal-section.active {
+      display: block;
+    }
+    .journal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+    }
+    .journal-card {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.06);
+      color: #e6eaf0;
+    }
+    .journal-card-title {
+      color: #f7f8fb;
+      font-size: 13px;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .journal-card-value {
+      color: #72f5b1;
+      font-size: 20px;
+      font-weight: 1000;
+    }
+    .journal-card-text {
+      color: #b9c3d4;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .journal-list {
+      display: grid;
+      gap: 8px;
+    }
+    .journal-item {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.06);
+    }
+    .journal-item.locked {
+      opacity: .45;
+    }
+    .journal-item-name {
+      color: #f7f8fb;
+      font-weight: 900;
+      font-size: 14px;
+    }
+    .journal-item-body {
+      margin-top: 5px;
+      color: #b9c3d4;
+      font-size: 12px;
+      line-height: 1.4;
+    }
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -404,6 +477,7 @@
   <div class="game-hints">
     <div class="game-hint">I · Inventory</div>
     <div class="game-hint">V · Vendor</div>
+    <div class="game-hint">J · Journal</div>
   </div>
 
   <div id="vendorModal" class="modal-backdrop" aria-hidden="true">
@@ -438,6 +512,25 @@
       </div>
 
       <div id="inventoryList" class="inventory-list"></div>
+    </div>
+  </div>
+
+  <div id="journalModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="journalTitle">
+      <div class="modal-header">
+        <div id="journalTitle" class="modal-title">Journal</div>
+        <button class="modal-close" data-close-modal aria-label="Close journal">×</button>
+      </div>
+
+      <div class="journal-tabs">
+        <button class="journal-tab active" data-journal-tab="stats">Stats</button>
+        <button class="journal-tab" data-journal-tab="items">Items</button>
+        <button class="journal-tab" data-journal-tab="achievements">Achievements</button>
+      </div>
+
+      <div id="journalStats" class="journal-section active"></div>
+      <div id="journalItems" class="journal-section"></div>
+      <div id="journalAchievements" class="journal-section"></div>
     </div>
   </div>
 
@@ -477,17 +570,19 @@
   <div id="firstSwappyPopModal" class="modal-backdrop" aria-hidden="true">
     <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="firstSwappyPopTitle">
       <div class="modal-header">
-        <div id="firstSwappyPopTitle" class="modal-title">You Received A New Item!</div>
+        <div id="firstSwappyPopTitle" class="modal-title">YOU'VE RECEIVED A NEW ITEM!</div>
         <button class="modal-close" data-close-modal aria-label="Close new item message">×</button>
       </div>
 
       <div class="celebration-title">SWAPPY POP!</div>
       <div class="celebration-body">
-        <p>A windowless van pulls up and tells you they have candy. Naturally, you approach with the confidence of someone who has learned absolutely nothing.</p>
-        <p>Unlike your repressed memory, they actually do have candy. It's a <strong>Swappy Pop</strong>!</p>
-        <p>Open Inventory with <strong>I</strong>, click <strong>Swappy Pop</strong>, then click any two active letters on the cube. The letters swap places, the candy disappears, and everyone pretends this was a valid economic transaction.</p>
+        <p>A windowless van approaches you offering candy. And just like you did as a kid, you accepted.</p>
+        <p>Except this time they actually do have candy for you. It's a <strong>Swappy Pop</strong>!</p>
+        <p><strong>What it does:</strong> Swappy Pop lets you swap any two active letters on the cube. Not used tiles. Not blank ghost tiles. Active letters. We have standards, which is disturbing because we also have van candy.</p>
+        <p><strong>How to use it:</strong> Press <strong>I</strong> to open Inventory, click <strong>Swappy Pop</strong>, then click two active letters on the cube. The letters trade places, one Swappy Pop is consumed, and the cube files another complaint with Human Resources.</p>
+        <p>Use it when one cursed letter is blocking a good word, a contract, or your fragile belief that this economy is fair.</p>
       </div>
-      <button class="celebration-button" data-close-modal>Accept Candy From The Van</button>
+      <button class="celebration-button" data-close-modal>Take The Candy, Obviously</button>
     </div>
   </div>
 
@@ -578,6 +673,10 @@
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
     const inventoryModal = document.getElementById('inventoryModal');
+    const journalModal = document.getElementById('journalModal');
+    const journalStats = document.getElementById('journalStats');
+    const journalItems = document.getElementById('journalItems');
+    const journalAchievements = document.getElementById('journalAchievements');
     const firstCashoutModal = document.getElementById('firstCashoutModal');
     const rankUpModal = document.getElementById('rankUpModal');
     const firstSwappyPopModal = document.getElementById('firstSwappyPopModal');
@@ -630,6 +729,7 @@
     let rank = 1;
     let hasSeenFirstCashout = false;
     let hasSeenFirstSwappyPop = false;
+    let lifetimeStats = null;
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
@@ -699,6 +799,8 @@
       vendorModal.setAttribute('aria-hidden', 'true');
       inventoryModal.classList.remove('open');
       inventoryModal.setAttribute('aria-hidden', 'true');
+      journalModal.classList.remove('open');
+      journalModal.setAttribute('aria-hidden', 'true');
       firstCashoutModal.classList.remove('open');
       firstCashoutModal.setAttribute('aria-hidden', 'true');
       rankUpModal.classList.remove('open');
@@ -721,6 +823,238 @@
         inventoryModal.classList.add('open');
         inventoryModal.setAttribute('aria-hidden', 'false');
       }
+
+      if (menuName === 'journal') {
+        updateJournalDisplay();
+        journalModal.classList.add('open');
+        journalModal.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    const ACHIEVEMENT_DEFINITIONS = [
+      {
+        id: 'first_cashout',
+        name: 'Questionable Wealth',
+        description: 'Earn your first SlopCoins and immediately become part of the problem.',
+        unlocked: () => hasSeenFirstCashout
+      },
+      {
+        id: 'first_swappy',
+        name: 'Van Candy Enthusiast',
+        description: 'Receive your first Swappy Pop and somehow survive the transaction.',
+        unlocked: () => hasSeenFirstSwappyPop
+      },
+      {
+        id: 'hundred_slop',
+        name: 'Tiny Slop Baron',
+        description: 'Earn 100 lifetime SlopCoin. Your empire is disgusting, but technically measurable.',
+        unlocked: () => lifetimeStats.lifetimeSlopCoinEarned >= 100
+      },
+      {
+        id: 'invalid_ten',
+        name: 'Dictionary Criminal',
+        description: 'Submit 10 illegal nonsense words. The cube noticed. The cube told everyone.',
+        unlocked: () => lifetimeStats.invalidWordsSubmitted >= 10
+      },
+      {
+        id: 'rank_five',
+        name: 'Middle Management Gremlin',
+        description: 'Reach Rank 5. You now have authority over nothing and vibes over everyone.',
+        unlocked: () => rank >= 5
+      }
+    ];
+
+    const ITEM_JOURNAL = {
+      swappyPop: {
+        name: 'Swappy Pop',
+        unlocked: () => hasSeenFirstSwappyPop || (inventory.swappyPop || 0) > 0 || lifetimeStats.itemsReceived.swappyPop > 0,
+        description: `A windowless van approaches you offering candy. And just like you did as a kid, you accepted. Except this time they actually do have candy for you. It's a Swappy Pop!`,
+        usage: 'Press I to open Inventory, click Swappy Pop, then click any two active letters on the cube. The letters swap places, one Swappy Pop is consumed, and the cube files another complaint with Human Resources.'
+      },
+      vowelVoucher: {
+        name: 'Vowel Voucher',
+        unlocked: () => (inventory.vowelVoucher || 0) > 0 || lifetimeStats.itemsReceived.vowelVoucher > 0,
+        description: 'A coupon for one vowel, printed on paper so flimsy it has already emotionally given up.',
+        usage: 'Not implemented yet. Eventually this will add one random vowel to a blank space.'
+      },
+      consonantCoupon: {
+        name: 'Consonant Coupon',
+        unlocked: () => (inventory.consonantCoupon || 0) > 0 || lifetimeStats.itemsReceived.consonantCoupon > 0,
+        description: 'A discount consonant from the clearance bin of language. Probably safe. Probably.',
+        usage: 'Not implemented yet. Eventually this will add one random consonant to a blank space.'
+      },
+      letterLeech: {
+        name: 'Letter Leech',
+        unlocked: () => (inventory.letterLeech || 0) > 0 || lifetimeStats.itemsReceived.letterLeech > 0,
+        description: 'A damp little parasite that removes a bad letter and makes eye contact while doing it.',
+        usage: 'Not implemented yet. Eventually this will remove one unwanted active letter.'
+      },
+      cubeReroll: {
+        name: 'Cube Reroll',
+        unlocked: () => (inventory.cubeReroll || 0) > 0 || lifetimeStats.itemsReceived.cubeReroll > 0,
+        description: 'Shake the cube until the alphabet forgets what it was doing.',
+        usage: 'Not implemented yet. Eventually this will reroll active letters on one face.'
+      },
+      multiplierMint: {
+        name: 'Multiplier Mint',
+        unlocked: () => (inventory.multiplierMint || 0) > 0 || lifetimeStats.itemsReceived.multiplierMint > 0,
+        description: 'A mint that makes numbers bigger, breath worse, and ethics optional.',
+        usage: 'Not implemented yet. Eventually this will boost the next valid word.'
+      }
+    };
+
+    function emptyLengthCounts() {
+      const counts = {};
+      for (let length = 1; length <= 15; length++) counts[length] = 0;
+      counts['16+'] = 0;
+      return counts;
+    }
+
+    function emptyGradeCounts() {
+      return { 'S+': 0, S: 0, A: 0, B: 0, C: 0, D: 0 };
+    }
+
+    function emptyItemCounts() {
+      return {
+        swappyPop: 0,
+        vowelVoucher: 0,
+        consonantCoupon: 0,
+        letterLeech: 0,
+        cubeReroll: 0,
+        multiplierMint: 0
+      };
+    }
+
+    function emptyLifetimeStats() {
+      return {
+        validWordsSubmitted: 0,
+        invalidWordsSubmitted: 0,
+        wordLengthCounts: emptyLengthCounts(),
+        gradeCounts: emptyGradeCounts(),
+        lifetimeSlopCoinEarned: 0,
+        lifetimeSlopCoinSpent: 0,
+        lifetimeXPEarned: 0,
+        totalCashouts: 0,
+        contractsCompleted: 0,
+        bonusContractsCompleted: 0,
+        tilesCleared: 0,
+        rareLettersUsed: 0,
+        swappyPopsUsed: 0,
+        vendorLettersBought: 0,
+        vendorLettersUsed: 0,
+        itemsReceived: emptyItemCounts(),
+        itemsUsed: emptyItemCounts(),
+        highestSingleWordScore: 0,
+        longestWord: 0
+      };
+    }
+
+    function normalizeLifetimeStats(value) {
+      const base = emptyLifetimeStats();
+      const incoming = value && typeof value === 'object' ? value : {};
+
+      return {
+        ...base,
+        ...incoming,
+        wordLengthCounts: { ...base.wordLengthCounts, ...(incoming.wordLengthCounts || {}) },
+        gradeCounts: { ...base.gradeCounts, ...(incoming.gradeCounts || {}) },
+        itemsReceived: { ...base.itemsReceived, ...(incoming.itemsReceived || {}) },
+        itemsUsed: { ...base.itemsUsed, ...(incoming.itemsUsed || {}) }
+      };
+    }
+
+    function recordWordLength(length) {
+      const key = length >= 16 ? '16+' : String(length);
+      lifetimeStats.wordLengthCounts[key] = (lifetimeStats.wordLengthCounts[key] || 0) + 1;
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    function statCard(title, value, text = '') {
+      return `
+        <div class="journal-card">
+          <div class="journal-card-title">${title}</div>
+          <div class="journal-card-value">${formatNumber(value)}</div>
+          ${text ? `<div class="journal-card-text">${text}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function updateJournalDisplay() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+
+      const wordLengths = Object.entries(lifetimeStats.wordLengthCounts)
+        .map(([length, count]) => statCard(`${length}-Letter Words`, count))
+        .join('');
+
+      const grades = Object.entries(lifetimeStats.gradeCounts)
+        .map(([grade, count]) => statCard(`Grade ${grade}`, count))
+        .join('');
+
+      journalStats.innerHTML = `
+        <div class="journal-grid">
+          ${statCard('Lifetime SlopCoin Earned', lifetimeStats.lifetimeSlopCoinEarned, 'Gross domestic product of your personal trash economy.')}
+          ${statCard('Lifetime SlopCoin Spent', lifetimeStats.lifetimeSlopCoinSpent, 'You gave it to the vendor. The vendor is not your friend.')}
+          ${statCard('Valid Words', lifetimeStats.validWordsSubmitted, 'Actual words. Legally impressive.')}
+          ${statCard('Illegal Word Attempts', lifetimeStats.invalidWordsSubmitted, 'Nice try, dictionary felon.')}
+          ${statCard('Cash Outs', lifetimeStats.totalCashouts, 'Times you converted effort into SlopCoin and shame.')}
+          ${statCard('Contracts Completed', lifetimeStats.contractsCompleted, 'Main objectives beaten into submission.')}
+          ${statCard('Bonus Contracts', lifetimeStats.bonusContractsCompleted, 'Extra credit, but make it morally damp.')}
+          ${statCard('Tiles Cleared', lifetimeStats.tilesCleared, 'Letters removed from cube society.')}
+          ${statCard('Rare Letters Used', lifetimeStats.rareLettersUsed, 'Q, X, Z, and J. The alphabet problem children.')}
+          ${statCard('Vendor Letters Bought', lifetimeStats.vendorLettersBought, 'Purchased from a suspicious menu with no refund policy.')}
+          ${statCard('Vendor Letters Used', lifetimeStats.vendorLettersUsed, 'At least some of your bad purchases became words.')}
+          ${statCard('Swappy Pops Used', lifetimeStats.swappyPopsUsed, 'Candy-assisted letter crimes.')}
+          ${statCard('Longest Word', lifetimeStats.longestWord, 'Personal best letter sausage.')}
+          ${statCard('Highest Word Score', lifetimeStats.highestSingleWordScore, 'Peak SlopCoin extraction event.')}
+          ${statCard('Lifetime XP Earned', lifetimeStats.lifetimeXPEarned, 'Career advancement calories with no nutritional value.')}
+        </div>
+
+        <h3>Word Length Counts</h3>
+        <div class="journal-grid">${wordLengths}</div>
+
+        <h3>Cash Out Grades</h3>
+        <div class="journal-grid">${grades}</div>
+      `;
+
+      journalItems.innerHTML = `
+        <div class="journal-list">
+          ${Object.entries(ITEM_JOURNAL).map(([itemKey, item]) => {
+            const unlocked = item.unlocked();
+            const count = inventory[itemKey] || 0;
+            const received = lifetimeStats.itemsReceived[itemKey] || 0;
+            const used = lifetimeStats.itemsUsed[itemKey] || 0;
+
+            return `
+              <div class="journal-item ${unlocked ? '' : 'locked'}">
+                <div class="journal-item-name">${unlocked ? item.name : '???'}</div>
+                <div class="journal-item-body">
+                  ${unlocked ? item.description : 'Undiscovered item. The cube is hiding things because it has trust issues.'}
+                  ${unlocked ? `<br><br><strong>How it works:</strong> ${item.usage}` : ''}
+                  ${unlocked ? `<br><br><strong>Owned:</strong> ${formatNumber(count)} · <strong>Lifetime received:</strong> ${formatNumber(received)} · <strong>Used:</strong> ${formatNumber(used)}` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      journalAchievements.innerHTML = `
+        <div class="journal-list">
+          ${ACHIEVEMENT_DEFINITIONS.map(achievement => {
+            const unlocked = achievement.unlocked();
+
+            return `
+              <div class="journal-item ${unlocked ? '' : 'locked'}">
+                <div class="journal-item-name">${unlocked ? achievement.name : 'Locked Achievement'}</div>
+                <div class="journal-item-body">${unlocked ? achievement.description : 'Not earned yet. The achievement goblin remains unimpressed.'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
     }
 
     function emptyRoundStats() {
@@ -1207,6 +1541,8 @@
       inventory = normalizeInventory(inventory);
       const previousCount = inventory[itemKey] || 0;
       inventory[itemKey] = previousCount + count;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.itemsReceived[itemKey] = (lifetimeStats.itemsReceived[itemKey] || 0) + count;
 
       if (itemKey === 'swappyPop' && previousCount === 0 && inventory[itemKey] > 0) {
         queueFirstSwappyPopCelebration();
@@ -1309,6 +1645,8 @@
       setSelected(activeSwapFirstSticker, false);
 
       roundStats.swappyUsed += 1;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.swappyPopsUsed += 1;
       updateMissionDisplay();
       removeInventoryItem('swappyPop', 1);
       deactivateInventoryItem('Swappy Pop consumed. Two letters swapped. Deliciously suspicious.');
@@ -1367,6 +1705,7 @@
         rank,
         hasSeenFirstCashout,
         hasSeenFirstSwappyPop,
+        lifetimeStats: normalizeLifetimeStats(lifetimeStats),
         inventory: normalizeInventory(inventory)
       };
 
@@ -1384,6 +1723,7 @@
         rank = rankFromXP(totalXP);
         hasSeenFirstCashout = Boolean(save.hasSeenFirstCashout);
         hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
+        lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         inventory = normalizeInventory(save.inventory);
       } catch {
         bankedScore = 0;
@@ -1410,6 +1750,8 @@
 
     function addXP(amount) {
       const previousRank = rank;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.lifetimeXPEarned += amount;
       totalXP += amount;
       rank = rankFromXP(totalXP);
 
@@ -1419,6 +1761,8 @@
         inventory = normalizeInventory(inventory);
         const previousSwappyCount = inventory.swappyPop || 0;
         inventory.swappyPop = previousSwappyCount + ranksGained;
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.itemsReceived.swappyPop = (lifetimeStats.itemsReceived.swappyPop || 0) + ranksGained;
 
         if (previousSwappyCount === 0 && inventory.swappyPop > 0) {
           queueFirstSwappyPopCelebration();
@@ -2159,7 +2503,28 @@
 
       if (event.key.toLowerCase() === 'i') {
         openMenu('inventory');
+        return;
       }
+
+      if (event.key.toLowerCase() === 'j') {
+        openMenu('journal');
+      }
+    });
+
+    document.querySelectorAll('[data-journal-tab]').forEach(button => {
+      button.addEventListener('click', () => {
+        const tabName = button.dataset.journalTab;
+
+        document.querySelectorAll('[data-journal-tab]').forEach(tab => {
+          tab.classList.toggle('active', tab === button);
+        });
+
+        document.querySelectorAll('.journal-section').forEach(section => {
+          section.classList.toggle('active', section.id === `journal${tabName[0].toUpperCase()}${tabName.slice(1)}`);
+        });
+
+        updateJournalDisplay();
+      });
     });
 
     document.querySelectorAll('[data-close-modal]').forEach(button => {
@@ -2186,7 +2551,10 @@
       if (!ALLOWED_WORDS.has(word)) {
         roundStats.invalidWords += 1;
         roundStats.cleanWords = 0;
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.invalidWordsSubmitted += 1;
         updateMissionDisplay();
+        saveGame();
         clearSelection(`"${word.toUpperCase()}" is not in the allowed word list.`);
         return;
       }
@@ -2204,6 +2572,17 @@
       });
 
       updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore);
+
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.validWordsSubmitted += 1;
+      lifetimeStats.lifetimeSlopCoinEarned += score.points;
+      lifetimeStats.tilesCleared += submittedPath.length;
+      lifetimeStats.rareLettersUsed += [...word.toUpperCase()].filter(letter => 'QXZJ'.includes(letter)).length;
+      lifetimeStats.vendorLettersUsed += submittedPath.filter(sticker => sticker.userData.source === 'vendor').length;
+      lifetimeStats.highestSingleWordScore = Math.max(lifetimeStats.highestSingleWordScore, score.points);
+      lifetimeStats.longestWord = Math.max(lifetimeStats.longestWord, word.length);
+      recordWordLength(word.length);
+
       updateWordDisplay();
       updateScoreDisplay(score.points);
       updateVendorDisplay();
@@ -2273,6 +2652,12 @@
       const cashedOut = totalScore;
       const bonusComplete = isMissionComplete(currentBonusMission);
       const grade = gradeRound(mainComplete, bonusComplete);
+
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.totalCashouts += 1;
+      lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
+      if (mainComplete) lifetimeStats.contractsCompleted += 1;
+      if (bonusComplete) lifetimeStats.bonusContractsCompleted += 1;
 
       let missionXP = 0;
       let rewardText = '';
@@ -2414,6 +2799,7 @@
     }
 
     loadGame();
+    lifetimeStats = normalizeLifetimeStats(lifetimeStats);
     startNewMissions();
     updateWordDisplay();
     updateScoreDisplay();
