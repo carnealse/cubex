@@ -177,6 +177,53 @@
       font-weight: 800;
       backdrop-filter: blur(10px);
     }
+    .active-item-hud {
+      position: fixed;
+      left: 50%;
+      bottom: 76px;
+      transform: translateX(-50%);
+      z-index: 5;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      max-width: min(560px, calc(100vw - 32px));
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(114,245,177,.22);
+      background: rgba(20,23,30,.92);
+      box-shadow: 0 16px 42px rgba(0,0,0,.42);
+      backdrop-filter: blur(10px);
+    }
+    .active-item-hud.open {
+      display: flex;
+    }
+    .active-item-icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: radial-gradient(circle at 35% 30%, #f0d520, #f28c28 45%, #d62929);
+      color: #111318;
+      font-size: 22px;
+      font-weight: 1000;
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,.25);
+    }
+    .active-item-title {
+      color: #f7f8fb;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .active-item-text {
+      color: #b9c3d4;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+    .active-item-cancel {
+      white-space: nowrap;
+      padding: 7px 10px !important;
+    }
     .journal-tabs {
       display: flex;
       gap: 8px;
@@ -416,8 +463,8 @@
     }
     .vendor-shop-item {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
+      grid-template-columns: 1fr 34px 38px 34px;
+      gap: 8px;
       align-items: center;
       padding: 10px;
       border-radius: 10px;
@@ -436,10 +483,18 @@
       line-height: 1.3;
     }
     .vendor-shop-price {
+      display: block;
+      margin-top: 3px;
       color: #72f5b1;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       white-space: nowrap;
+    }
+    .vendor-shop-qty {
+      text-align: center;
+      color: #f7f8fb;
+      font-size: 16px;
+      font-weight: 900;
     }
     .inventory-list {
       margin-top: 8px;
@@ -562,6 +617,7 @@
 
       <div class="vendor-section-title">Definitely Legal Items</div>
       <div id="vendorItemList" class="vendor-shop-list"></div>
+      <button id="vendorItemBuy" class="vendor-buy">Buy Selected Items</button>
     </div>
   </div>
 
@@ -665,6 +721,15 @@
 
   <div id="confettiLayer" class="confetti-layer"></div>
 
+  <div id="activeItemHud" class="active-item-hud" aria-live="polite">
+    <div id="activeItemIcon" class="active-item-icon">🍭</div>
+    <div>
+      <div id="activeItemTitle" class="active-item-title">Swappy Pop armed</div>
+      <div id="activeItemText" class="active-item-text">Click two active letters to swap them.</div>
+    </div>
+    <button id="cancelItemUse" class="active-item-cancel">Cancel</button>
+  </div>
+
   <div class="controls">
     <button id="submit">Submit</button>
     <button id="cashOut" title="Locked until the main contract is complete. SlopCoin is fake, but standards are somehow real.">Cash Out</button>
@@ -749,6 +814,7 @@
     const vendorBalance = document.getElementById('vendorBalance');
     const consonantQty = document.getElementById('consonantQty');
     const vendorItemList = document.getElementById('vendorItemList');
+    const vendorItemBuy = document.getElementById('vendorItemBuy');
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
@@ -768,6 +834,10 @@
     const rankUpDescription = document.getElementById('rankUpDescription');
     const rankUpReward = document.getElementById('rankUpReward');
     const confettiLayer = document.getElementById('confettiLayer');
+    const activeItemHud = document.getElementById('activeItemHud');
+    const activeItemIcon = document.getElementById('activeItemIcon');
+    const activeItemTitle = document.getElementById('activeItemTitle');
+    const activeItemText = document.getElementById('activeItemText');
 
     const SAVE_KEY = 'cubex-save-v1';
 
@@ -841,6 +911,7 @@
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
+    let pendingItemPurchases = {};
     let currentMainMission = null;
     let currentBonusMission = null;
     let pendingRankUpCelebration = null;
@@ -1776,10 +1847,30 @@
       }
     }
 
+    function updateActiveItemHud() {
+      if (!activeInventoryItem) {
+        activeItemHud.classList.remove('open');
+        return;
+      }
+
+      const item = INVENTORY_ITEMS[activeInventoryItem];
+
+      activeItemIcon.textContent = activeInventoryItem === 'swappyPop' ? '🍭' : '🎒';
+      activeItemTitle.textContent = `${item.name} armed`;
+      activeItemText.textContent = activeInventoryItem === 'swappyPop'
+        ? 'Click two active letters to swap them, or cancel if you regained judgment.'
+        : 'Item armed. The cube lawyers are still arguing about what this does.';
+
+      activeItemHud.classList.add('open');
+    }
+
     function deactivateInventoryItem(message = null) {
+      if (activeSwapFirstSticker) setSelected(activeSwapFirstSticker, false);
+
       activeInventoryItem = null;
       activeSwapFirstSticker = null;
       updateInventoryDisplay();
+      updateActiveItemHud();
 
       if (message) setStatus(message);
     }
@@ -1794,6 +1885,7 @@
       activeInventoryItem = 'swappyPop';
       activeSwapFirstSticker = null;
       updateInventoryDisplay();
+      updateActiveItemHud();
     }
 
     function swapStickerLetters(firstSticker, secondSticker) {
@@ -1979,6 +2071,22 @@
       return stickers.filter(sticker => sticker.userData.used);
     }
 
+    function itemPurchaseCount() {
+      return Object.values(pendingItemPurchases).reduce((sum, qty) => sum + qty, 0);
+    }
+
+    function itemPurchaseCost() {
+      return Object.entries(pendingItemPurchases).reduce((sum, [itemKey, qty]) => {
+        const item = INVENTORY_ITEMS[itemKey];
+        return sum + (item ? item.vendorPrice * qty : 0);
+      }, 0);
+    }
+
+    function resetItemPurchases() {
+      pendingItemPurchases = {};
+      updateVendorDisplay();
+    }
+
     function vendorSelectionCount() {
       return pendingConsonants + pendingVowels;
     }
@@ -1990,6 +2098,7 @@
     function resetVendorSelection() {
       pendingConsonants = 0;
       pendingVowels = 0;
+      pendingItemPurchases = {};
       updateVendorDisplay();
     }
 
@@ -2024,21 +2133,26 @@
     function updateVendorItemShop() {
       vendorItemList.innerHTML = '';
 
+      const totalCost = itemPurchaseCost();
+      const selectedItems = itemPurchaseCount();
+
       for (const [itemKey, item] of Object.entries(INVENTORY_ITEMS)) {
         if (!isItemAvailableForVendor(itemKey)) continue;
 
-        const canAfford = bankedScore >= item.vendorPrice;
+        const qty = pendingItemPurchases[itemKey] || 0;
         const row = document.createElement('div');
         row.className = 'vendor-shop-item';
         row.innerHTML = `
           <div>
             <div class="vendor-shop-name">${item.name}</div>
-            <div class="vendor-shop-desc">${item.description}</div>
+            <div class="vendor-shop-desc">
+              ${item.description}
+              <span class="vendor-shop-price">${item.vendorPrice.toLocaleString()} SlopCoin each</span>
+            </div>
           </div>
-          <div>
-            <div class="vendor-shop-price">${item.vendorPrice.toLocaleString()} SlopCoin</div>
-            <button ${canAfford ? '' : 'disabled'} data-buy-item="${itemKey}">Buy</button>
-          </div>
+          <button data-item-minus="${itemKey}" ${qty <= 0 ? 'disabled' : ''}>−</button>
+          <div class="vendor-shop-qty">${qty.toLocaleString()}</div>
+          <button data-item-plus="${itemKey}">+</button>
         `;
 
         vendorItemList.appendChild(row);
@@ -2057,6 +2171,11 @@
           </div>
         `;
       }
+
+      vendorItemBuy.disabled = selectedItems === 0 || totalCost > bankedScore;
+      vendorItemBuy.textContent = selectedItems === 0
+        ? 'Buy Selected Items'
+        : `Buy ${selectedItems.toLocaleString()} Item${selectedItems === 1 ? '' : 's'} · ${totalCost.toLocaleString()} SlopCoin`;
     }
 
     function randomVowel() {
@@ -2720,6 +2839,11 @@
       detachSlice(selected);
     }
 
+    document.getElementById('cancelItemUse').addEventListener('click', () => {
+      if (!activeInventoryItem) return;
+      deactivateInventoryItem('Item use cancelled. The candy returns to your inventory, emotionally sticky but legally intact.');
+    });
+
     document.addEventListener('keydown', event => {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
@@ -2728,7 +2852,7 @@
 
       if (event.key === 'Escape') {
         closeMenus();
-        if (activeInventoryItem) deactivateInventoryItem('Item use cancelled.');
+        if (activeInventoryItem) deactivateInventoryItem('Item use cancelled. Nothing consumed. The cube hates loopholes.');
         return;
       }
 
@@ -3004,27 +3128,63 @@
     });
 
     vendorItemList.addEventListener('click', event => {
-      const button = event.target.closest('[data-buy-item]');
-      if (!button || busy) return;
+      if (busy) return;
 
-      const itemKey = button.dataset.buyItem;
-      const item = INVENTORY_ITEMS[itemKey];
+      const plus = event.target.closest('[data-item-plus]');
+      const minus = event.target.closest('[data-item-minus]');
 
-      if (!item || !isItemAvailableForVendor(itemKey)) return;
+      if (plus) {
+        const itemKey = plus.dataset.itemPlus;
+        const item = INVENTORY_ITEMS[itemKey];
+        if (!item || !isItemAvailableForVendor(itemKey)) return;
 
-      if (bankedScore < item.vendorPrice) {
-        setStatus(`Not enough SlopCoin for ${item.name}. The vendor accepts your poverty as entertainment.`);
+        pendingItemPurchases[itemKey] = (pendingItemPurchases[itemKey] || 0) + 1;
+        updateVendorDisplay();
         return;
       }
 
-      bankedScore -= item.vendorPrice;
-      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
-      lifetimeStats.lifetimeSlopCoinSpent += item.vendorPrice;
+      if (minus) {
+        const itemKey = minus.dataset.itemMinus;
+        if (!pendingItemPurchases[itemKey]) return;
 
-      addInventoryItem(itemKey, 1);
+        pendingItemPurchases[itemKey] -= 1;
+        if (pendingItemPurchases[itemKey] <= 0) delete pendingItemPurchases[itemKey];
+        updateVendorDisplay();
+      }
+    });
+
+    vendorItemBuy.addEventListener('click', () => {
+      if (busy) return;
+
+      const totalCost = itemPurchaseCost();
+      const totalItems = itemPurchaseCount();
+
+      if (totalItems === 0) return;
+
+      if (totalCost > bankedScore) {
+        setStatus(`Not enough SlopCoin. The vendor accepts your poverty as entertainment.`);
+        updateVendorDisplay();
+        return;
+      }
+
+      bankedScore -= totalCost;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.lifetimeSlopCoinSpent += totalCost;
+
+      Object.entries(pendingItemPurchases).forEach(([itemKey, qty]) => {
+        if (!qty || qty <= 0) return;
+        addInventoryItem(itemKey, qty);
+      });
+
+      const purchaseSummary = Object.entries(pendingItemPurchases)
+        .filter(([, qty]) => qty > 0)
+        .map(([itemKey, qty]) => `${qty} ${INVENTORY_ITEMS[itemKey].name}`)
+        .join(', ');
+
+      pendingItemPurchases = {};
       updateScoreDisplay();
       updateJournalDisplay();
-      setStatus(`Bought ${item.name} for ${item.vendorPrice.toLocaleString()} SlopCoin. The vendor grins like the receipt has teeth.`);
+      setStatus(`Bought ${purchaseSummary} for ${totalCost.toLocaleString()} SlopCoin. The vendor grins like the receipt has teeth.`);
       showPendingCelebration();
     });
 
