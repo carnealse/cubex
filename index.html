@@ -914,6 +914,27 @@
   </div>
 
 
+  <div id="dailyCompleteModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="dailyCompleteTitle">
+      <div class="modal-header">
+        <div id="dailyCompleteTitle" class="modal-title">Daily Challenge Complete</div>
+        <button class="modal-close" data-close-modal aria-label="Close daily completion">×</button>
+      </div>
+
+      <div class="achievement-popup-header">
+        <div class="achievement-icon" style="--achievement-hue:150;">📅</div>
+        <div id="dailyCompleteTier" class="achievement-tier">SCHEDULED REGRET SATISFIED</div>
+      </div>
+
+      <div id="dailyCompleteName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="dailyCompleteDescription"></p>
+      </div>
+      <div id="dailyCompleteReward" class="achievement-reward"></div>
+      <button class="celebration-button" data-close-modal>Accept Today’s Bribe</button>
+    </div>
+  </div>
+
   <div id="achievementModal" class="modal-backdrop" aria-hidden="true">
     <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="achievementTitle">
       <div class="modal-header">
@@ -1162,6 +1183,10 @@
     const dailyPanelTitle = document.getElementById('dailyPanelTitle');
     const dailyPanelWords = document.getElementById('dailyPanelWords');
     const dailyPanelMeta = document.getElementById('dailyPanelMeta');
+    const dailyCompleteModal = document.getElementById('dailyCompleteModal');
+    const dailyCompleteName = document.getElementById('dailyCompleteName');
+    const dailyCompleteDescription = document.getElementById('dailyCompleteDescription');
+    const dailyCompleteReward = document.getElementById('dailyCompleteReward');
     const inventoryModal = document.getElementById('inventoryModal');
     const journalModal = document.getElementById('journalModal');
     const journalStats = document.getElementById('journalStats');
@@ -1287,6 +1312,7 @@
     let pendingItemUnlockCelebrations = [];
     let pendingHintUnlockCelebrations = [];
     let pendingAchievementCelebrations = [];
+    let pendingDailyCompletionCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -1368,6 +1394,8 @@
       vendorModal.setAttribute('aria-hidden', 'true');
       dailyModal.classList.remove('open');
       dailyModal.setAttribute('aria-hidden', 'true');
+      dailyCompleteModal.classList.remove('open');
+      dailyCompleteModal.setAttribute('aria-hidden', 'true');
       inventoryModal.classList.remove('open');
       inventoryModal.setAttribute('aria-hidden', 'true');
       journalModal.classList.remove('open');
@@ -2941,6 +2969,12 @@
         return true;
       }
 
+      if (pendingDailyCompletionCelebrations.length > 0) {
+        const payload = pendingDailyCompletionCelebrations.shift();
+        showDailyCompletionCelebration(payload);
+        return true;
+      }
+
       if (pendingAchievementCelebrations.length > 0) {
         const payload = pendingAchievementCelebrations.shift();
         showAchievementCelebration(payload);
@@ -3458,6 +3492,76 @@
       });
     }
 
+    function grantDailyReward(reward) {
+      if (!reward) return 'Mystery Garbage';
+
+      if (reward.type === 'item') {
+        const count = Number(reward.count || 1);
+        addInventoryItem(reward.itemKey, count);
+        return `${count} ${INVENTORY_ITEMS[reward.itemKey]?.name || reward.itemKey}`;
+      }
+
+      if (reward.type === 'slopcoin') {
+        const amount = Number(reward.amount || 0);
+        if (amount > 0) {
+          bankedScore += amount;
+          lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+          lifetimeStats.achievementSlopCoinAwarded += amount;
+        }
+        return `${amount} SlopCoin`;
+      }
+
+      return 'Suspicious Reward';
+    }
+
+    function queueDailyCompletionCelebration(day, challenge, rewardText) {
+      pendingDailyCompletionCelebrations.push({
+        day,
+        title: challenge.title,
+        words: [...challenge.words],
+        rewardText
+      });
+    }
+
+    function showDailyCompletionCelebration(payload) {
+      closeMenus();
+      dailyCompleteName.textContent = `DAY ${payload.day} COMPLETE`;
+      dailyCompleteDescription.textContent =
+        `You spelled ${payload.words.join(', ')}. The cube briefly considered respect, then remembered its brand guidelines.`;
+      dailyCompleteReward.innerHTML = `<strong>Reward:</strong> ${payload.rewardText || 'Nothing. Which would be rude, so fortunately not this time.'}`;
+      dailyCompleteModal.classList.add('open');
+      dailyCompleteModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
+    function completeDailyChallenge(day, challenge) {
+      dailyState = normalizeDailyState(dailyState);
+      const key = String(day);
+
+      if (dailyState.completedDays[key]?.rewardClaimed) return;
+
+      const rewardText = (challenge.reward || [])
+        .map(grantDailyReward)
+        .join(' • ');
+
+      dailyState.completedDays[key] = {
+        completedAt: new Date().toISOString(),
+        rewardClaimed: true,
+        rewardText
+      };
+
+      dailyMode = false;
+      activeDailyDay = null;
+
+      queueDailyCompletionCelebration(day, challenge, rewardText);
+      saveGame();
+      updateScoreDisplay();
+      updateInventoryDisplay();
+      updateDailyDisplay();
+      checkAchievements();
+      showPendingCelebration();
+    }
+
     function updateDailyDisplay() {
       dailyState = normalizeDailyState(dailyState);
       const challenge = currentDailyChallenge();
@@ -3498,7 +3602,7 @@
         dailyPanelTitle.textContent = `Daily Challenge · Day ${day}`;
         renderDailyWords(dailyPanelWords, challenge, progress);
         dailyPanelMeta.textContent = complete
-          ? 'Complete. Rewards will be handled by the next daily system pass.'
+          ? 'Complete. Reward claimed. The cube has moved the bribe from theoretical to legally inconvenient.'
           : 'Spell all three target words. The cube has a clipboard and a personality problem.';
       } else {
         dailyPanel.classList.remove('open');
@@ -3573,8 +3677,9 @@
 
       const complete = challenge.words.every(target => progress[target]);
       if (complete) {
-        dailyState.completedDays[String(activeDailyDay)] = { completedAt: new Date().toISOString() };
-        setStatus(`Daily Challenge Day ${activeDailyDay} complete. Reward popup comes next pass. The cube is already polishing the bait.`);
+        setStatus(`Daily Challenge Day ${activeDailyDay} complete. The cube has released the bribe package.`);
+        completeDailyChallenge(activeDailyDay, challenge);
+        return;
       } else {
         setStatus(`Daily word complete: ${upper}. Keep going. The cube remains annoyingly invested.`);
       }
@@ -4881,6 +4986,31 @@
       }
     });
 
+    function missionNeedsRareLetter(mission) {
+      return Boolean(mission && mission.stat === 'rareLetters' && !isMissionComplete(mission));
+    }
+
+    function activeLettersOnCube() {
+      return stickers
+        .filter(sticker => sticker.visible && !sticker.userData.used)
+        .map(sticker => String(sticker.userData.letter || '').toUpperCase());
+    }
+
+    function ensureRareLetterForMissions() {
+      if (!missionNeedsRareLetter(currentMainMission) && !missionNeedsRareLetter(currentBonusMission)) return;
+
+      if (activeLettersOnCube().some(letter => 'QXZJ'.includes(letter))) return;
+
+      const candidates = stickers.filter(sticker => sticker.visible && !sticker.userData.used);
+      if (!candidates.length) return;
+
+      const target = candidates[Math.floor(Math.random() * candidates.length)];
+      const rareLetters = ['Q', 'X', 'Z', 'J'];
+      target.userData.letter = rareLetters[Math.floor(Math.random() * rareLetters.length)];
+      target.userData.source = 'mission';
+      refreshStickerTexture(target);
+    }
+
     function startFreshRound() {
       clearHintStartHighlight();
       clearSelection('Starting a fresh cube.');
@@ -4913,6 +5043,8 @@
       pivot.quaternion.identity();
       pivot.rotation.set(0, 0, 0);
       startNewMissions();
+      ensureRareLetterForMissions();
+      updateMissionDisplay();
     }
 
     document.getElementById('abandonRound').addEventListener('click', () => {
