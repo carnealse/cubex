@@ -458,6 +458,39 @@
     </div>
   </div>
 
+  <div id="rankUpModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="rankUpTitle">
+      <div class="modal-header">
+        <div id="rankUpTitle" class="modal-title">New Rank!</div>
+        <button class="modal-close" data-close-modal aria-label="Close rank up">×</button>
+      </div>
+
+      <div id="rankUpName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="rankUpDescription"></p>
+        <p id="rankUpReward"></p>
+      </div>
+      <button class="celebration-button" data-close-modal>Continue My Fake Career</button>
+    </div>
+  </div>
+
+  <div id="firstSwappyPopModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="firstSwappyPopTitle">
+      <div class="modal-header">
+        <div id="firstSwappyPopTitle" class="modal-title">You Received A New Item!</div>
+        <button class="modal-close" data-close-modal aria-label="Close new item message">×</button>
+      </div>
+
+      <div class="celebration-title">SWAPPY POP!</div>
+      <div class="celebration-body">
+        <p>A windowless van pulls up and tells you they have candy. Naturally, you approach with the confidence of someone who has learned absolutely nothing.</p>
+        <p>Unlike your repressed memory, they actually do have candy. It's a <strong>Swappy Pop</strong>!</p>
+        <p>Open Inventory with <strong>I</strong>, click <strong>Swappy Pop</strong>, then click any two active letters on the cube. The letters swap places, the candy disappears, and everyone pretends this was a valid economic transaction.</p>
+      </div>
+      <button class="celebration-button" data-close-modal>Accept Candy From The Van</button>
+    </div>
+  </div>
+
   <div id="confettiLayer" class="confetti-layer"></div>
 
   <div class="controls">
@@ -546,6 +579,11 @@
     const vendorModal = document.getElementById('vendorModal');
     const inventoryModal = document.getElementById('inventoryModal');
     const firstCashoutModal = document.getElementById('firstCashoutModal');
+    const rankUpModal = document.getElementById('rankUpModal');
+    const firstSwappyPopModal = document.getElementById('firstSwappyPopModal');
+    const rankUpName = document.getElementById('rankUpName');
+    const rankUpDescription = document.getElementById('rankUpDescription');
+    const rankUpReward = document.getElementById('rankUpReward');
     const confettiLayer = document.getElementById('confettiLayer');
 
     const SAVE_KEY = 'cubex-save-v1';
@@ -591,11 +629,14 @@
     let totalXP = 0;
     let rank = 1;
     let hasSeenFirstCashout = false;
+    let hasSeenFirstSwappyPop = false;
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
     let currentMainMission = null;
     let currentBonusMission = null;
+    let pendingRankUpCelebration = null;
+    let pendingSwappyPopCelebration = false;
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -660,6 +701,10 @@
       inventoryModal.setAttribute('aria-hidden', 'true');
       firstCashoutModal.classList.remove('open');
       firstCashoutModal.setAttribute('aria-hidden', 'true');
+      rankUpModal.classList.remove('open');
+      rankUpModal.setAttribute('aria-hidden', 'true');
+      firstSwappyPopModal.classList.remove('open');
+      firstSwappyPopModal.setAttribute('aria-hidden', 'true');
     }
 
     function openMenu(menuName) {
@@ -804,7 +849,7 @@
             target: Math.min(5, 1 + Math.floor(rank / 7)),
             unit: ' rare letters',
             rewardXP: 140 + rank * 18,
-            flavor: 'Deploy Q, X, Z, or J. The alphabet’s little war criminals need work.'
+            flavor: 'Find Q, X, Z, or J and put the alphabet’s little war criminals to work.'
           }
         );
       }
@@ -881,7 +926,7 @@
           target: Math.min(3, 1 + Math.floor(rank / 10)),
           unit: ' rare letters',
           rewardXP: 80 + rank * 10,
-          flavor: 'Find the alphabet’s problem children and put them to work.'
+          flavor: 'Find Q, X, Z, or J and put the alphabet’s problem children to work.'
         },
         {
           id: 'bonus_long',
@@ -1082,6 +1127,68 @@
       }, 4300);
     }
 
+    const RANK_UP_DESCRIPTIONS = [
+      'Now that you have mastered bullying letters on a helpless cube, management has rewarded you with a louder title and no meaningful increase in respect.',
+      'You climbed one more rung on the corporate ladder of nonsense. Please ignore the fact that the ladder is made of wet cardboard and unpaid internships.',
+      'Your dedication to harvesting alphabet slurry has been noticed by absolutely nobody important. Enjoy the title. It is legally not compensation.',
+      'Against all odds and several warnings from good taste, you have advanced. Your dignity has been processed into a transferable workplace credential.',
+      'Congratulations. You converted time, attention, and self-worth into a slightly shinier label. Shareholders would be proud if you had any.',
+      'The cube has promoted you. This is mostly because the cube cannot afford real employees and you keep accepting payment in SlopCoin.',
+      'You have achieved upward mobility in a fake economy. Somewhere, a motivational speaker just shed a single sponsored tear.',
+      'Your new title comes with prestige, responsibility, and the exact same existential odor as the previous title.',
+      'Human Resources reviewed your performance and determined you are exploitable, resilient, and unlikely to ask where the SlopCoin comes from.',
+      'You are now more important than you were several seconds ago. Nothing has changed, but the font is bigger, so legally this is growth.'
+    ];
+
+    function randomRankUpDescription() {
+      return RANK_UP_DESCRIPTIONS[Math.floor(Math.random() * RANK_UP_DESCRIPTIONS.length)];
+    }
+
+    function showRankUpCelebration(newRank, ranksGained) {
+      closeMenus();
+
+      rankUpName.textContent = titleForRank(newRank);
+      rankUpDescription.textContent = randomRankUpDescription();
+      rankUpReward.textContent =
+        `Reward: +${ranksGained} Swappy Pop${ranksGained === 1 ? '' : 's'}. Candy-based advancement is the backbone of this diseased little economy.`;
+
+      rankUpModal.classList.add('open');
+      rankUpModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
+    function showFirstSwappyPopCelebration() {
+      closeMenus();
+      firstSwappyPopModal.classList.add('open');
+      firstSwappyPopModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
+    function queueFirstSwappyPopCelebration() {
+      if (hasSeenFirstSwappyPop) return;
+
+      hasSeenFirstSwappyPop = true;
+      pendingSwappyPopCelebration = true;
+      saveGame();
+    }
+
+    function showPendingCelebration() {
+      if (pendingRankUpCelebration) {
+        const pending = pendingRankUpCelebration;
+        pendingRankUpCelebration = null;
+        showRankUpCelebration(pending.newRank, pending.ranksGained);
+        return true;
+      }
+
+      if (pendingSwappyPopCelebration) {
+        pendingSwappyPopCelebration = false;
+        showFirstSwappyPopCelebration();
+        return true;
+      }
+
+      return false;
+    }
+
     function showFirstCashoutCelebration() {
       closeMenus();
       firstCashoutModal.classList.add('open');
@@ -1098,7 +1205,13 @@
 
     function addInventoryItem(itemKey, count = 1) {
       inventory = normalizeInventory(inventory);
-      inventory[itemKey] = (inventory[itemKey] || 0) + count;
+      const previousCount = inventory[itemKey] || 0;
+      inventory[itemKey] = previousCount + count;
+
+      if (itemKey === 'swappyPop' && previousCount === 0 && inventory[itemKey] > 0) {
+        queueFirstSwappyPopCelebration();
+      }
+
       updateInventoryDisplay();
       saveGame();
     }
@@ -1253,6 +1366,7 @@
         totalXP,
         rank,
         hasSeenFirstCashout,
+        hasSeenFirstSwappyPop,
         inventory: normalizeInventory(inventory)
       };
 
@@ -1269,6 +1383,7 @@
         totalXP = Number(save.totalXP) || 0;
         rank = rankFromXP(totalXP);
         hasSeenFirstCashout = Boolean(save.hasSeenFirstCashout);
+        hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
         inventory = normalizeInventory(save.inventory);
       } catch {
         bankedScore = 0;
@@ -1302,14 +1417,23 @@
 
       if (ranksGained > 0) {
         inventory = normalizeInventory(inventory);
-        inventory.swappyPop = (inventory.swappyPop || 0) + ranksGained;
+        const previousSwappyCount = inventory.swappyPop || 0;
+        inventory.swappyPop = previousSwappyCount + ranksGained;
+
+        if (previousSwappyCount === 0 && inventory.swappyPop > 0) {
+          queueFirstSwappyPopCelebration();
+        }
       }
 
       updateRankDisplay();
       updateInventoryDisplay();
       saveGame();
 
-      return ranksGained;
+      return {
+        previousRank,
+        newRank: rank,
+        ranksGained
+      };
     }
 
     function blankStickers() {
@@ -2039,12 +2163,18 @@
     });
 
     document.querySelectorAll('[data-close-modal]').forEach(button => {
-      button.addEventListener('click', closeMenus);
+      button.addEventListener('click', () => {
+        closeMenus();
+        showPendingCelebration();
+      });
     });
 
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
       backdrop.addEventListener('pointerdown', event => {
-        if (event.target === backdrop) closeMenus();
+        if (event.target !== backdrop) return;
+
+        closeMenus();
+        showPendingCelebration();
       });
     });
 
@@ -2082,14 +2212,20 @@
         ? ''
         : ` · ${score.multiplier}× length multiplier`;
 
-      const ranksGained = addXP(score.points);
-      const rankText = ranksGained > 0
-        ? ` · RANK UP: ${titleForRank(rank)} · +${ranksGained} Swappy Pop${ranksGained === 1 ? '' : 's'}`
+      const xpResult = addXP(score.points);
+      const rankText = xpResult.ranksGained > 0
+        ? ` · RANK UP: ${titleForRank(rank)} · +${xpResult.ranksGained} Swappy Pop${xpResult.ranksGained === 1 ? '' : 's'}`
         : '';
 
       setStatus(
         `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} SlopCoin · +${score.points} XP${rankText}`
       );
+
+      if (xpResult.ranksGained > 0) {
+        showRankUpCelebration(xpResult.newRank, xpResult.ranksGained);
+      } else {
+        showPendingCelebration();
+      }
     });
 
     function startFreshRound() {
@@ -2156,7 +2292,9 @@
         rewardText += ` ${grade === 'S+' ? '+2' : '+1'} Swappy Pop reward.`;
       }
 
-      if (missionXP > 0) addXP(missionXP);
+      const cashoutXPResult = missionXP > 0
+        ? addXP(missionXP)
+        : { ranksGained: 0, newRank: rank };
 
       bankedScore += totalScore;
       totalScore = 0;
@@ -2172,7 +2310,17 @@
       );
 
       if (shouldCelebrateFirstCashout) {
+        if (cashoutXPResult.ranksGained > 0) {
+          pendingRankUpCelebration = {
+            newRank: cashoutXPResult.newRank,
+            ranksGained: cashoutXPResult.ranksGained
+          };
+        }
         showFirstCashoutCelebration();
+      } else if (cashoutXPResult.ranksGained > 0) {
+        showRankUpCelebration(cashoutXPResult.newRank, cashoutXPResult.ranksGained);
+      } else {
+        showPendingCelebration();
       }
     });
 
