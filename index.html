@@ -351,6 +351,21 @@
       color: #aeb8c9;
       font-size: 13px;
     }
+    .vendor-balance {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(114,245,177,.18);
+      background: rgba(114,245,177,.08);
+      color: #e6eaf0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .vendor-balance span {
+      color: #72f5b1;
+      font-size: 18px;
+      font-weight: 1000;
+    }
     .vendor-row {
       display: grid;
       grid-template-columns: 1fr 34px 38px 34px;
@@ -530,6 +545,7 @@
       </div>
 
       <div class="vendor-meta">Blank spaces: <span id="blankCount">0</span></div>
+      <div class="vendor-balance">Available SlopCoin: <span id="vendorBalance">0</span></div>
       <div class="vendor-row">
         <div class="vendor-item">Consonants <span class="vendor-cost">1 SlopCoin each</span></div>
         <button id="consonantMinus" aria-label="Remove consonant">−</button>
@@ -730,6 +746,7 @@
     const xpMeta = document.getElementById('xpMeta');
     const xpFill = document.getElementById('xpFill');
     const blankCount = document.getElementById('blankCount');
+    const vendorBalance = document.getElementById('vendorBalance');
     const consonantQty = document.getElementById('consonantQty');
     const vendorItemList = document.getElementById('vendorItemList');
     const vowelQty = document.getElementById('vowelQty');
@@ -943,9 +960,13 @@
 
     function isItemAvailableForVendor(itemKey) {
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      inventory = normalizeInventory(inventory);
+
+      const item = INVENTORY_ITEMS[itemKey];
+      if (!item) return false;
 
       return (
-        isItemUnlocked(itemKey) ||
+        rank >= item.unlockRank ||
         (inventory[itemKey] || 0) > 0 ||
         (lifetimeStats.itemsReceived[itemKey] || 0) > 0 ||
         (lifetimeStats.itemsDiscovered[itemKey] || 0) > 0
@@ -1885,6 +1906,13 @@
         hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         inventory = normalizeInventory(save.inventory);
+
+        Object.keys(INVENTORY_ITEMS).forEach(itemKey => {
+          if ((inventory[itemKey] || 0) > 0) {
+            lifetimeStats.itemsReceived[itemKey] = Math.max(lifetimeStats.itemsReceived[itemKey] || 0, inventory[itemKey]);
+            lifetimeStats.itemsDiscovered[itemKey] = 1;
+          }
+        });
       } catch {
         bankedScore = 0;
         totalXP = 0;
@@ -1971,6 +1999,7 @@
       const cost = vendorSelectionCost();
 
       blankCount.textContent = blanks.toLocaleString();
+      vendorBalance.textContent = bankedScore.toLocaleString();
       consonantQty.textContent = pendingConsonants.toLocaleString();
       vowelQty.textContent = pendingVowels.toLocaleString();
 
@@ -1988,6 +2017,46 @@
       buyButton.textContent = selected === 0
         ? 'Buy Letters'
         : `Buy Letters · ${cost} SlopCoin`;
+
+      updateVendorItemShop();
+    }
+
+    function updateVendorItemShop() {
+      vendorItemList.innerHTML = '';
+
+      for (const [itemKey, item] of Object.entries(INVENTORY_ITEMS)) {
+        if (!isItemAvailableForVendor(itemKey)) continue;
+
+        const canAfford = bankedScore >= item.vendorPrice;
+        const row = document.createElement('div');
+        row.className = 'vendor-shop-item';
+        row.innerHTML = `
+          <div>
+            <div class="vendor-shop-name">${item.name}</div>
+            <div class="vendor-shop-desc">${item.description}</div>
+          </div>
+          <div>
+            <div class="vendor-shop-price">${item.vendorPrice.toLocaleString()} SlopCoin</div>
+            <button ${canAfford ? '' : 'disabled'} data-buy-item="${itemKey}">Buy</button>
+          </div>
+        `;
+
+        vendorItemList.appendChild(row);
+      }
+
+      if (!vendorItemList.children.length) {
+        const nextUnlock = Object.values(INVENTORY_ITEMS)
+          .filter(item => rank < item.unlockRank)
+          .sort((a, b) => a.unlockRank - b.unlockRank)[0];
+
+        vendorItemList.innerHTML = `
+          <div class="journal-card-text">
+            No items available yet. ${nextUnlock
+              ? `${nextUnlock.name} unlocks at Rank ${nextUnlock.unlockRank}.`
+              : 'The vendor has somehow run out of bad ideas, which feels illegal.'}
+          </div>
+        `;
+      }
     }
 
     function randomVowel() {
