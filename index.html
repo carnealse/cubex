@@ -399,7 +399,7 @@
     .daily-panel {
       position: fixed;
       left: 12px;
-      top: 245px;
+      top: 322px;
       z-index: 2;
       width: min(330px, calc(100vw - 24px));
       display: none;
@@ -648,8 +648,26 @@
     .skin-card { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.055); }
     .skin-card.locked { opacity: .68; }
     .skin-card.owned { border-color: rgba(114,245,177,.35); background: rgba(114,245,177,.07); }
-    .skin-swatch { display: grid; grid-template-columns: repeat(3,18px); grid-template-rows: repeat(2,18px); gap: 3px; padding: 6px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.12); }
-    .skin-swatch-tile { border-radius: 4px; border: 1px solid rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    .skin-swatch {
+      display: grid;
+      grid-template-columns: repeat(3, 14px);
+      grid-template-rows: repeat(2, 14px);
+      gap: 3px;
+      padding: 5px;
+      width: fit-content;
+      border-radius: 10px;
+      background: rgba(0,0,0,.28);
+      border: 1px solid rgba(255,255,255,.12);
+      box-sizing: border-box;
+    }
+    .skin-swatch-tile {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,.3);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+      box-sizing: border-box;
+    }
     .skin-shop-name { font-weight: 950; color: #f4f4f4; }
     .skin-shop-desc { color: #b9c0cf; font-size: .82rem; line-height: 1.35; margin-top: 3px; }
     .skin-shop-status { color: #f0d520; font-size: .78rem; margin-top: 4px; font-weight: 850; }
@@ -796,9 +814,83 @@
     }
     button:hover { background: #303747; }
     button:disabled { opacity: .45; cursor: not-allowed; }
-  </style>
+  
+    .daily-panel {
+      top: 322px !important;
+      left: 20px !important;
+      width: 414px !important;
+      max-width: calc(100vw - 40px) !important;
+      box-sizing: border-box !important;
+      z-index: 7 !important;
+    }
+
+    .mission-panel {
+      box-sizing: border-box !important;
+      z-index: 8 !important;
+    }
+
+  
+    #effectOverlay {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+      touch-action: none;
+      cursor: default !important;
+    }
+
+    .effect-shop-list { display: grid; gap: 10px; margin-top: 10px; }
+
+    .effect-card {
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.055);
+    }
+
+    .effect-card.locked { opacity: .68; }
+    .effect-card.owned {
+      border-color: rgba(103,190,255,.35);
+      background: rgba(103,190,255,.07);
+    }
+
+    .effect-icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 1.5rem;
+      background: rgba(0,0,0,.28);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+
+    .effect-shop-name { font-weight: 950; color: #f4f4f4; }
+    .effect-shop-desc { color: #b9c0cf; font-size: .82rem; line-height: 1.35; margin-top: 3px; }
+    .effect-shop-status { color: #7ac7ff; font-size: .78rem; margin-top: 4px; font-weight: 850; }
+    .effect-slot-pill {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 850;
+      background: rgba(122,199,255,.12);
+      color: #9ed7ff;
+      border: 1px solid rgba(122,199,255,.18);
+    }
+
+</style>
 </head>
 <body>
+  <canvas id="effectOverlay" aria-hidden="true"></canvas>
   <div class="word-panel">
     <div class="word-label">Selected Word</div>
     <div id="wordValue" class="word-value"></div>
@@ -893,6 +985,11 @@
       <div class="vendor-section-title">Skins For Financially Questionable Squares</div>
       <div class="journal-card-text">Vendor Unlocks are bought after the stunt. Achievement Skins are earned and equipped here after the cube finishes pretending cosmetics are a personality.</div>
       <div id="vendorSkinList" class="skin-shop-list"></div>
+
+
+      <div class="vendor-section-title">Effects For Honest Overacting</div>
+      <div class="journal-card-text">Cheaper than skins, dumber than therapy, and somehow still a better use of money than most financial products.</div>
+      <div id="vendorEffectList" class="effect-shop-list"></div>
     </div>
   </div>
 
@@ -919,6 +1016,7 @@
         <button class="journal-tab" data-journal-tab="items">Items</button>
         <button class="journal-tab" data-journal-tab="hints">Hints</button>
         <button class="journal-tab" data-journal-tab="skins">Skins</button>
+        <button class="journal-tab" data-journal-tab="effects">Effects</button>
         <button class="journal-tab" data-journal-tab="achievements">Achievements</button>
       </div>
 
@@ -926,6 +1024,7 @@
       <div id="journalItems" class="journal-section"></div>
       <div id="journalHints" class="journal-section"></div>
       <div id="journalSkins" class="journal-section"></div>
+      <div id="journalEffects" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
     </div>
   </div>
@@ -952,7 +1051,27 @@
     </div>
   </div>
 
-  <div id="skinUnlockModal" class="modal-backdrop" aria-hidden="true">
+  
+  <div id="effectUnlockModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="effectUnlockTitle">
+      <div class="modal-header">
+        <div id="effectUnlockTitle" class="modal-title">Effect Unlocked</div>
+        <button class="modal-close" data-close-modal aria-label="Close effect unlock">×</button>
+      </div>
+      <div class="achievement-popup-header">
+        <div id="effectUnlockIcon" class="achievement-icon" style="--achievement-hue:185;">✨</div>
+        <div id="effectUnlockTier" class="achievement-tier">VISUAL NONSENSE OBTAINED</div>
+      </div>
+      <div id="effectUnlockName" class="celebration-title"></div>
+      <div class="celebration-body">
+        <p id="effectUnlockDescription"></p>
+      </div>
+      <div id="effectUnlockReward" class="achievement-reward"></div>
+      <button class="celebration-button" data-close-modal>Accept The Visual Clutter</button>
+    </div>
+  </div>
+
+<div id="skinUnlockModal" class="modal-backdrop" aria-hidden="true">
     <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="skinUnlockTitle">
       <div class="modal-header"><div id="skinUnlockTitle" class="modal-title">New Skin Available</div><button class="modal-close" data-close-modal aria-label="Close skin unlock">×</button></div>
       <div class="achievement-popup-header"><div id="skinUnlockIcon" class="achievement-icon" style="--achievement-hue:38;">🎨</div><div id="skinUnlockTier" class="achievement-tier">COSMETIC NONSENSE DETECTED</div></div>
@@ -1200,6 +1319,7 @@
     const vendorItemBuy = document.getElementById('vendorItemBuy');
     const vendorHintList = document.getElementById('vendorHintList');
     const vendorSkinList = document.getElementById('vendorSkinList');
+    const vendorEffectList = document.getElementById('vendorEffectList');
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
@@ -1222,6 +1342,7 @@
     const journalItems = document.getElementById('journalItems');
     const journalHints = document.getElementById('journalHints');
     const journalSkins = document.getElementById('journalSkins');
+    const journalEffects = document.getElementById('journalEffects');
     const journalAchievements = document.getElementById('journalAchievements');
     const skinUnlockModal = document.getElementById('skinUnlockModal');
     const skinUnlockTitle = document.getElementById('skinUnlockTitle');
@@ -1260,6 +1381,14 @@
     const rankUpName = document.getElementById('rankUpName');
     const rankUpDescription = document.getElementById('rankUpDescription');
     const rankUpReward = document.getElementById('rankUpReward');
+    const effectOverlay = document.getElementById('effectOverlay');
+    const effectUnlockModal = document.getElementById('effectUnlockModal');
+    const effectUnlockTitle = document.getElementById('effectUnlockTitle');
+    const effectUnlockIcon = document.getElementById('effectUnlockIcon');
+    const effectUnlockTier = document.getElementById('effectUnlockTier');
+    const effectUnlockName = document.getElementById('effectUnlockName');
+    const effectUnlockDescription = document.getElementById('effectUnlockDescription');
+    const effectUnlockReward = document.getElementById('effectUnlockReward');
     const confettiLayer = document.getElementById('confettiLayer');
     const activeItemHud = document.getElementById('activeItemHud');
     const activeItemIcon = document.getElementById('activeItemIcon');
@@ -1336,6 +1465,7 @@
     let hasSeenFirstSwappyPop = false;
     let lifetimeStats = null;
     let skinState = { vendorUnlocked: {}, owned: { classic: true }, equipped: 'classic' };
+    let effectState = { vendorUnlocked: {}, owned: {}, equipped: { validWord: '', invalidWord: '', cashOut: '', ambient: '' } };
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
@@ -1352,6 +1482,7 @@
     let pendingAchievementCelebrations = [];
     let pendingDailyCompletionCelebrations = [];
     let pendingSkinUnlockCelebrations = [];
+    let pendingEffectUnlockCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -1379,7 +1510,107 @@
       platinumCube: { name:'Platinum Cube', type:'achievement', icon:'💿', requirement:'Reach Rank 50.', unlockText:'Skin Unlocked:\nPlatinum Cube!\n\nYou reached the final rank, which means you have converted time, stubbornness, and questionable judgment into a shiny object.\n\nThe cube has awarded you platinum status. This does not include lounge access, dental coverage, or emotional closure.', colors:{ right:0xe5e9f0,left:0xbec7d4,top:0xffffff,bottom:0x8f9aaa,front:0xd9dee8,back:0xaeb8c8,inside:0x08090b }, textColor:'#10131a' }
     };
 
-    const LETTER_VALUES = {
+    
+    const EFFECT_DEFINITIONS = {
+      confettiPop: {
+        name: 'Confetti Pop',
+        type: 'achievement',
+        slot: 'validWord',
+        rarity: 'Common',
+        price: 500,
+        icon: '🎉',
+        requirement: 'Submit 100 valid words.',
+        description: 'Small confetti bursts when you submit a valid word.',
+        unlockText: 'Effect Unlocked:\nConfetti Pop!\n\nYou submitted enough real words that the cube briefly authorized joy.\n\nTiny celebratory paper garbage will now explode when you do something correctly.',
+        unlocked: () => lifetimeStats.validWordsSubmitted >= 100
+      },
+      smokePuff: {
+        name: 'Smoke Puff',
+        type: 'achievement',
+        slot: 'invalidWord',
+        rarity: 'Common',
+        price: 500,
+        icon: '💨',
+        requirement: 'Submit 25 invalid words.',
+        description: 'Little gray smoke puffs when the dictionary rejects you.',
+        unlockText: 'Effect Unlocked:\nSmoke Puff!\n\nYou insulted the dictionary enough times that the cube installed a tiny exhaust system.\n\nInvalid words now leave smoke, because even nonsense deserves a dramatic exit.',
+        unlocked: () => lifetimeStats.invalidWordsSubmitted >= 25
+      },
+      staticFlicker: {
+        name: 'Static Flicker',
+        type: 'achievement',
+        slot: 'invalidWord',
+        rarity: 'Rare',
+        price: 750,
+        icon: '📺',
+        requirement: 'Fail 5 main contracts.',
+        description: 'Rejected words cause a quick haunted-screen glitch flash.',
+        unlockText: 'Effect Unlocked:\nStatic Flicker!\n\nYou failed enough contracts that the cube’s internal confidence briefly disconnected from reality.\n\nRejected words now flicker like a haunted spreadsheet.',
+        unlocked: () => lifetimeStats.mainContractsFailed >= 5
+      },
+      noirRain: {
+        name: 'Noir Rain',
+        type: 'achievement',
+        slot: 'ambient',
+        rarity: 'Epic',
+        price: 1000,
+        icon: '🌧️',
+        requirement: 'Unlock Noir Phase.',
+        description: 'Faint diagonal rain behind the cube for maximum dramatic unemployment.',
+        unlockText: 'Effect Unlocked:\nNoir Rain!\n\nThe cube has entered its moody weather era.\n\nA faint rain effect is now available for players who believe every vowel has a secret.',
+        unlocked: () => isSkinOwned('noirPhase')
+      },
+      medicalPulse: {
+        name: 'Medical Pulse',
+        type: 'vendor',
+        slot: 'invalidWord',
+        rarity: 'Rare',
+        price: 750,
+        icon: '🩺',
+        requirement: 'Rank 10 and unlock Urgent Scare.',
+        description: 'Mistakes trigger a sharp red pulse like a clinic that already wants your insurance card.',
+        unlockText: 'New Effect Available:\nMedical Pulse!\n\nThe vendor noticed you unlocked a medical cube and immediately monetized panic.\n\nMistakes can now get the emotional support of a red pulse from a machine that definitely costs too much.',
+        unlocked: () => rank >= 10 && (isVendorSkinUnlocked('urgentScare') || isSkinOwned('urgentScare'))
+      },
+      goldSpark: {
+        name: 'Gold Spark',
+        type: 'vendor',
+        slot: 'cashOut',
+        rarity: 'Epic',
+        price: 1000,
+        icon: '✨',
+        requirement: 'Rank 8 and bank 2,500 lifetime SlopCoin.',
+        description: 'Cash outs sparkle like fake wealth wearing a tuxedo.',
+        unlockText: 'New Effect Available:\nGold Spark!\n\nYou banked enough SlopCoin for the cube to develop a luxury rash.\n\nCash outs now sparkle, because fake money deserves fake dignity.',
+        unlocked: () => rank >= 8 && lifetimeStats.lifetimeSlopCoinBanked >= 2500
+      },
+      fireworkPop: {
+        name: 'Firework Pop',
+        type: 'vendor',
+        slot: 'cashOut',
+        rarity: 'Epic',
+        price: 1000,
+        icon: '🎆',
+        requirement: 'Rank 8 and unlock Flag Cube.',
+        description: 'Cash outs explode in patriotic sparks without solving any national problems.',
+        unlockText: 'New Effect Available:\nFirework Pop!\n\nYou unlocked enough patriotic nonsense for the vendor to sell you tiny explosions with no permit.\n\nYour cash outs can now celebrate like a parking lot on the Fourth of July.',
+        unlocked: () => rank >= 8 && (isVendorSkinUnlocked('flagCube') || isSkinOwned('flagCube'))
+      },
+      thatOneMovie: {
+        name: 'That One Movie',
+        type: 'vendor',
+        slot: 'ambient',
+        rarity: 'Epic',
+        price: 1000,
+        icon: '🟢',
+        requirement: 'Rank 12 and bank 1,000 lifetime SlopCoin.',
+        description: 'Green 1s and 0s drift behind the cube at 40% opacity. Very tasteful existentialism.',
+        unlockText: `New Effect Available:\nThat One Movie!\n\nYou know the one. The hero wakes up and realizes humanity is trapped inside a giant machine, everyone is being harvested, reality is a lie, and freedom means escaping the system that keeps people docile, useful, and slightly damp.\n\nWait.\n\nSorry.\n\nThat is not the movie.\n\nThat is just employment with worse lighting.\n\nAnyway, glowing 1s and 0s now rain behind the cube at 40% opacity, so you can enjoy a tasteful reminder that the simulation has payroll deductions.`,
+        unlocked: () => rank >= 12 && lifetimeStats.lifetimeSlopCoinBanked >= 1000
+      }
+    };
+
+const LETTER_VALUES = {
       A: 1, E: 1, I: 1, L: 1, N: 1, O: 1, R: 1, S: 1, T: 1, U: 1,
       D: 2, G: 2,
       B: 3, C: 3, M: 3, P: 3,
@@ -1473,6 +1704,8 @@
       firstSwappyPopModal.setAttribute('aria-hidden', 'true');
       itemUnlockModal.classList.remove('open');
       itemUnlockModal.setAttribute('aria-hidden', 'true');
+      effectUnlockModal.classList.remove('open');
+      effectUnlockModal.setAttribute('aria-hidden', 'true');
       skinUnlockModal.classList.remove('open');
       skinUnlockModal.setAttribute('aria-hidden', 'true');
     }
@@ -2108,6 +2341,7 @@
       }
 
       checkSkinUnlocks();
+      checkEffectUnlocks();
     }
 
     function achievementIconHtml(achievement) {
@@ -2282,6 +2516,34 @@
       }).join('');
 
       const skinCards = Object.entries(CUBE_SKINS).map(([skinKey, skin]) => {
+      const effectCards = Object.entries(EFFECT_DEFINITIONS).map(([effectKey, effect]) => {
+        const owned = isEffectOwned(effectKey);
+        const vendorUnlocked = isVendorEffectUnlocked(effectKey);
+        const equipped = normalizeEffectState(effectState).equipped[effect.slot] === effectKey;
+        const status = owned
+          ? (equipped ? `Equipped in ${effect.slot} slot.` : 'Owned. Available to equip.')
+          : effect.type === 'vendor'
+            ? (vendorUnlocked ? `Available in Vendor for ${effect.price.toLocaleString()} SlopCoin.` : `Locked. ${effect.requirement}`)
+            : `Locked. ${effect.requirement}`;
+
+        return `
+          <div class="journal-item ${owned ? '' : 'locked'}">
+            <div class="achievement-journal-item">
+              <div class="effect-icon-box">${effect.icon}</div>
+              <div>
+                <div class="achievement-topline">
+                  <div class="achievement-name">${effect.name}</div>
+                  <div class="achievement-meta">${effect.rarity} · ${effect.slot}</div>
+                </div>
+                <div class="journal-item-body">${status}<br><br>${effect.description}</div>
+                <div class="achievement-reward-line"><strong>Requirement:</strong> ${effect.requirement}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+
         const owned = isSkinOwned(skinKey), vendorUnlocked = isVendorSkinUnlocked(skinKey), equipped = skinState.equipped === skinKey;
         const status = owned ? (equipped ? 'Equipped. The cube is wearing this mistake right now.' : 'Owned. Available to equip.') : skin.type === 'vendor' ? (vendorUnlocked ? `Available in Vendor for ${skin.price.toLocaleString()} SlopCoin.` : `Locked. ${skin.requirement}`) : `Locked. ${skin.requirement}`;
         return `<div class="journal-item ${owned ? '' : 'locked'}"><div class="achievement-journal-item">${skinSwatchHtml(skinKey)}<div><div class="achievement-topline"><div class="achievement-name">${skin.name}</div><div class="achievement-meta">${skin.type === 'vendor' ? 'Vendor Skin' : skin.type === 'achievement' ? 'Achievement Skin' : 'Default'}</div></div><div class="journal-item-body">${status}</div><div class="achievement-reward-line"><strong>Requirement:</strong> ${skin.requirement}</div></div></div></div>`;
@@ -2318,6 +2580,7 @@
           ${statCard('Lifetime XP Earned', lifetimeStats.lifetimeXPEarned, 'Career advancement calories with no nutritional value.')}
           ${statCard('Titles Unlocked', lifetimeStats.titlesUnlocked.length, lifetimeStats.titlesUnlocked.length ? lifetimeStats.titlesUnlocked.join(', ') : 'No titles yet. Your aura remains unbranded.')}
           ${statCard('Cube Skins Unlocked', Object.values(skinState.owned || {}).filter(Boolean).length, `Equipped: ${skinDefinition(skinState.equipped).name}`)}
+          ${statCard('Effects Owned', Object.values(normalizeEffectState(effectState).owned || {}).filter(Boolean).length, `Ambient: ${effectDefinition(normalizeEffectState(effectState).equipped.ambient)?.name || 'None'} · Cash Out: ${effectDefinition(normalizeEffectState(effectState).equipped.cashOut)?.name || 'None'}`)}
         </div>
 
         <h3>Word Length Counts</h3>
@@ -2374,6 +2637,12 @@
       journalSkins.innerHTML = `
         <div class="journal-list">
           ${skinCards}
+        </div>
+      `;
+
+      journalEffects.innerHTML = `
+        <div class="journal-list">
+          ${effectCards}
         </div>
       `;
 
@@ -3064,6 +3333,12 @@
         return true;
       }
 
+      if (pendingEffectUnlockCelebrations.length > 0) {
+        const payload = pendingEffectUnlockCelebrations.shift();
+        showEffectUnlockCelebration(payload);
+        return true;
+      }
+
       if (pendingAchievementCelebrations.length > 0) {
         const payload = pendingAchievementCelebrations.shift();
         showAchievementCelebration(payload);
@@ -3133,6 +3408,91 @@
       skinUnlockReward.innerHTML = isVendorUnlock ? `<strong>Vendor Price:</strong> ${skin.price.toLocaleString()} SlopCoin` : '<strong>Reward:</strong> Skin owned. Equip it in Vendor → Skins.';
       skinUnlockModal.classList.add('open'); skinUnlockModal.setAttribute('aria-hidden', 'false'); launchConfetti();
     }
+
+    function normalizeEffectState(value) {
+      const incoming = value && typeof value === 'object' ? value : {};
+      return {
+        vendorUnlocked: { ...(incoming.vendorUnlocked || {}) },
+        owned: { ...(incoming.owned || {}) },
+        equipped: {
+          validWord: typeof incoming.equipped?.validWord === 'string' ? incoming.equipped.validWord : '',
+          invalidWord: typeof incoming.equipped?.invalidWord === 'string' ? incoming.equipped.invalidWord : '',
+          cashOut: typeof incoming.equipped?.cashOut === 'string' ? incoming.equipped.cashOut : '',
+          ambient: typeof incoming.equipped?.ambient === 'string' ? incoming.equipped.ambient : ''
+        }
+      };
+    }
+
+    function effectDefinition(effectKey) {
+      return EFFECT_DEFINITIONS[effectKey] || null;
+    }
+
+    function isEffectOwned(effectKey) {
+      effectState = normalizeEffectState(effectState);
+      return Boolean(effectState.owned[effectKey]);
+    }
+
+    function isVendorEffectUnlocked(effectKey) {
+      effectState = normalizeEffectState(effectState);
+      const effect = effectDefinition(effectKey);
+      return Boolean(effect && effect.type === 'vendor' && effectState.vendorUnlocked[effectKey]);
+    }
+
+    function unlockVendorEffect(effectKey) {
+      effectState = normalizeEffectState(effectState);
+      if (effectState.vendorUnlocked[effectKey] || effectState.owned[effectKey]) return false;
+      effectState.vendorUnlocked[effectKey] = true;
+      pendingEffectUnlockCelebrations.push({ effectKey, mode: 'vendor' });
+      return true;
+    }
+
+    function awardAchievementEffect(effectKey) {
+      effectState = normalizeEffectState(effectState);
+      if (effectState.owned[effectKey]) return false;
+      effectState.owned[effectKey] = true;
+      pendingEffectUnlockCelebrations.push({ effectKey, mode: 'achievement' });
+      return true;
+    }
+
+    function showEffectUnlockCelebration(payload) {
+      const effect = effectDefinition(payload.effectKey);
+      if (!effect) return;
+      const isVendorUnlock = payload.mode === 'vendor';
+
+      closeMenus();
+      effectUnlockTitle.textContent = isVendorUnlock ? 'New Effect Available' : 'Effect Unlocked';
+      effectUnlockIcon.textContent = effect.icon || '✨';
+      effectUnlockTier.textContent = isVendorUnlock ? 'VENDOR EFFECT' : 'ACHIEVEMENT EFFECT';
+      effectUnlockName.textContent = effect.name;
+      effectUnlockDescription.innerHTML = String(effect.unlockText || effect.name)
+        .split('\n')
+        .filter(Boolean)
+        .map(line => line.trim())
+        .join('<br><br>');
+      effectUnlockReward.innerHTML = isVendorUnlock
+        ? `<strong>Vendor Price:</strong> ${effect.price.toLocaleString()} SlopCoin`
+        : `<strong>Reward:</strong> Owned. Equip it under Vendor → Effects.`;
+
+      effectUnlockModal.classList.add('open');
+      effectUnlockModal.setAttribute('aria-hidden', 'false');
+      launchConfetti();
+    }
+
+    function checkEffectUnlocks() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      effectState = normalizeEffectState(effectState);
+
+      Object.entries(EFFECT_DEFINITIONS).forEach(([effectKey, effect]) => {
+        if (effect.type === 'vendor') {
+          if (!effectState.vendorUnlocked[effectKey] && !effectState.owned[effectKey] && effect.unlocked()) {
+            unlockVendorEffect(effectKey);
+          }
+        } else if (!effectState.owned[effectKey] && effect.unlocked()) {
+          awardAchievementEffect(effectKey);
+        }
+      });
+    }
+
 
     function addInventoryItem(itemKey, count = 1) {
       inventory = normalizeInventory(inventory);
@@ -3864,6 +4224,7 @@
         dailyState: normalizeDailyState(dailyState),
         lifetimeStats: normalizeLifetimeStats(lifetimeStats),
         skinState: normalizeSkinState(skinState),
+        effectState: normalizeEffectState(effectState),
         inventory: normalizeInventory(inventory)
       };
 
@@ -3884,6 +4245,7 @@
         dailyState = normalizeDailyState(save.dailyState);
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         skinState = normalizeSkinState(save.skinState);
+        effectState = normalizeEffectState(save.effectState);
         inventory = normalizeInventory(save.inventory);
 
         Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
@@ -3910,6 +4272,7 @@
         rank = 1;
         dailyState = normalizeDailyState(null);
         skinState = normalizeSkinState(null);
+        effectState = normalizeEffectState(null);
       }
     }
 
@@ -4038,6 +4401,7 @@
       updateVendorItemShop();
       updateVendorHintShop();
       updateVendorSkinShop();
+      updateVendorEffectShop();
     }
 
     function updateVendorItemShop() {
@@ -4142,7 +4506,66 @@
       Object.entries(CUBE_SKINS).filter(([,skin])=>skin.type!=='vendor').forEach(renderSkin);
     }
 
-    function randomVowel() {
+    
+    function effectStatusText(effectKey) {
+      const effect = effectDefinition(effectKey);
+      const equipped = normalizeEffectState(effectState).equipped[effect.slot] === effectKey;
+      if (isEffectOwned(effectKey)) return equipped ? `Owned · Equipped in ${effect.slot}` : 'Owned';
+      if (effect.type === 'vendor' && isVendorEffectUnlocked(effectKey)) return `Available · ${effect.price.toLocaleString()} SlopCoin`;
+      return `Locked · ${effect.requirement}`;
+    }
+
+    function updateVendorEffectShop() {
+      if (!vendorEffectList) return;
+      effectState = normalizeEffectState(effectState);
+      vendorEffectList.innerHTML = '';
+
+      const renderEffect = ([effectKey, effect]) => {
+        const owned = isEffectOwned(effectKey);
+        const equipped = effectState.equipped[effect.slot] === effectKey;
+        const vendorUnlocked = effect.type === 'vendor' && isVendorEffectUnlocked(effectKey);
+        const canBuy = vendorUnlocked && !owned && bankedScore >= effect.price;
+
+        const row = document.createElement('div');
+        row.className = `effect-card ${owned ? 'owned' : ''} ${!owned && !vendorUnlocked && effect.type !== 'achievement' ? 'locked' : ''}`;
+        row.innerHTML = `
+          <div class="effect-icon-box">${effect.icon}</div>
+          <div>
+            <div class="effect-shop-name">${effect.name}</div>
+            <div class="effect-shop-desc">${effect.description}</div>
+            <div class="effect-slot-pill">${effect.slot} slot · ${effect.rarity}</div>
+            <div class="effect-shop-status">${effectStatusText(effectKey)}</div>
+          </div>
+          <div>
+            ${owned
+              ? `<button data-equip-effect="${effectKey}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>`
+              : effect.type === 'vendor' && vendorUnlocked
+                ? `<button data-buy-effect="${effectKey}" ${canBuy ? '' : 'disabled'}>Buy</button>`
+                : `<button disabled>${effect.type === 'achievement' ? 'Earn' : 'Locked'}</button>`}
+          </div>
+        `;
+        vendorEffectList.appendChild(row);
+      };
+
+      const vendorHeader = document.createElement('div');
+      vendorHeader.className = 'vendor-section-title';
+      vendorHeader.textContent = 'Vendor Effects';
+      vendorEffectList.appendChild(vendorHeader);
+      Object.entries(EFFECT_DEFINITIONS).filter(([, effect]) => effect.type === 'vendor').forEach(renderEffect);
+
+      const achievementHeader = document.createElement('div');
+      achievementHeader.className = 'vendor-section-title';
+      achievementHeader.textContent = 'Achievement Effects';
+      vendorEffectList.appendChild(achievementHeader);
+      Object.entries(EFFECT_DEFINITIONS).filter(([, effect]) => effect.type === 'achievement').forEach(renderEffect);
+    }
+
+    function currentEquippedEffect(slot) {
+      effectState = normalizeEffectState(effectState);
+      return effectDefinition(effectState.equipped[slot] || '');
+    }
+
+function randomVowel() {
       return weightedRandomLetter(VOWEL_COUNTS);
     }
 
@@ -5115,6 +5538,7 @@
           ? `${randomMissionFailureComment()} ${failedMainRoundText()}`
           : randomMissionFailureComment();
 
+        triggerEffect('invalidWord', { stickers: [...selectedStickers] });
         clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${failureText}`);
         showPendingCelebration();
         return;
@@ -5175,6 +5599,7 @@
         `Accepted: ${word.toUpperCase()} · ${score.baseScore} base${multiplierText} · +${score.points} SlopCoin · +${score.points} XP${rankText}`
       );
 
+      triggerEffect('validWord', { stickers: submittedPath });
       checkAchievements();
 
       if (xpResult.ranksGained > 0) {
@@ -5394,6 +5819,7 @@
       const shouldCelebrateFirstCashout = !hasSeenFirstCashout && bankedScore > 0;
       if (shouldCelebrateFirstCashout) hasSeenFirstCashout = true;
 
+      triggerEffect('cashOut', { grade });
       checkAchievements();
       startFreshRound();
       saveGame();
@@ -5476,7 +5902,57 @@
       }
     });
 
-    vendorSkinList.addEventListener('click', event => {
+    
+    vendorEffectList.addEventListener('click', event => {
+      const buyButton = event.target.closest('[data-buy-effect]');
+      const equipButton = event.target.closest('[data-equip-effect]');
+
+      if (buyButton) {
+        const effectKey = buyButton.dataset.buyEffect;
+        const effect = effectDefinition(effectKey);
+        if (!effect || !isVendorEffectUnlocked(effectKey)) return;
+
+        if (bankedScore < effect.price) {
+          setStatus('Not enough SlopCoin. The vendor says visual nonsense is a premium market.');
+          updateVendorDisplay();
+          return;
+        }
+
+        bankedScore -= effect.price;
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.lifetimeSlopCoinSpent += effect.price;
+        lifetimeStats.effectsUnlocked = pushUnique(lifetimeStats.effectsUnlocked, effect.name);
+        effectState = normalizeEffectState(effectState);
+        effectState.owned[effectKey] = true;
+        effectState.equipped[effect.slot] = effectKey;
+
+        if (effect.slot === 'ambient') initAmbientState();
+
+        updateScoreDisplay();
+        updateJournalDisplay();
+        updateVendorDisplay();
+        saveGame();
+        setStatus(`Bought and equipped ${effect.name} for ${effect.price.toLocaleString()} SlopCoin. The vendor applauds your commitment to decorative nonsense.`);
+        return;
+      }
+
+      if (equipButton) {
+        const effectKey = equipButton.dataset.equipEffect;
+        const effect = effectDefinition(effectKey);
+        if (!effect || !isEffectOwned(effectKey)) return;
+
+        effectState = normalizeEffectState(effectState);
+        effectState.equipped[effect.slot] = effectKey;
+        if (effect.slot === 'ambient') initAmbientState();
+
+        updateVendorDisplay();
+        updateJournalDisplay();
+        saveGame();
+        setStatus(`${effect.name} equipped in the ${effect.slot} slot. The cube has gained a layer of theater.`);
+      }
+    });
+
+vendorSkinList.addEventListener('click', event => {
       const buyButton = event.target.closest('[data-buy-skin]'); const equipButton = event.target.closest('[data-equip-skin]');
       if (buyButton) { const skinKey=buyButton.dataset.buySkin; const skin=skinDefinition(skinKey); if(!isVendorSkinUnlocked(skinKey)) return; if(bankedScore < skin.price){ setStatus('Not enough SlopCoin. The vendor softly closes the paint catalog.'); updateVendorDisplay(); return; } bankedScore-=skin.price; lifetimeStats=normalizeLifetimeStats(lifetimeStats); lifetimeStats.lifetimeSlopCoinSpent += skin.price; skinState=normalizeSkinState(skinState); skinState.owned[skinKey]=true; skinState.equipped=skinKey; lifetimeStats.skinsUnlocked=pushUnique(lifetimeStats.skinsUnlocked, skin.name); applyEquippedSkin(); updateScoreDisplay(); updateJournalDisplay(); updateVendorDisplay(); saveGame(); setStatus(`Bought and equipped ${skin.name} for ${skin.price.toLocaleString()} SlopCoin. The vendor says the paint is premium. The receipt says absolutely nothing legally useful.`); return; }
       if (equipButton) { const skinKey=equipButton.dataset.equipSkin; if(!isSkinOwned(skinKey)) return; skinState=normalizeSkinState(skinState); skinState.equipped=skinKey; applyEquippedSkin(); updateVendorDisplay(); updateJournalDisplay(); saveGame(); setStatus(`${skinDefinition(skinKey).name} equipped. The cube has changed outfits and learned nothing.`); }
@@ -5601,7 +6077,192 @@
       showPendingCelebration();
     });
 
-    addEventListener('resize', () => {
+    
+    const effectCtx = effectOverlay.getContext('2d');
+    let fxParticles = [];
+    let ambientState = [];
+
+    function resizeEffectOverlay() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      effectOverlay.width = Math.round(window.innerWidth * dpr);
+      effectOverlay.height = Math.round(window.innerHeight * dpr);
+      effectCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      initAmbientState();
+    }
+
+    function initAmbientState() {
+      ambientState = [];
+      const ambient = currentEquippedEffect('ambient');
+      if (!ambient) return;
+
+      if (ambient.name === 'That One Movie') {
+        const cols = Math.ceil(window.innerWidth / 22);
+        ambientState = Array.from({ length: cols }, (_, i) => ({
+          x: i * 22 + Math.random() * 8,
+          y: Math.random() * -window.innerHeight,
+          speed: 1.3 + Math.random() * 2.7
+        }));
+      } else if (ambient.name === 'Noir Rain') {
+        ambientState = Array.from({ length: 110 }, () => ({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          len: 12 + Math.random() * 22,
+          speed: 5 + Math.random() * 5
+        }));
+      }
+    }
+
+    function projectWorldToScreen(vec3) {
+      const projected = vec3.clone().project(camera);
+      return {
+        x: (projected.x * 0.5 + 0.5) * window.innerWidth,
+        y: (-projected.y * 0.5 + 0.5) * window.innerHeight
+      };
+    }
+
+    function centerPointForStickers(stickerList) {
+      if (!stickerList || !stickerList.length) return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
+      const total = stickerList.reduce((acc, sticker) => {
+        const world = new THREE.Vector3();
+        sticker.getWorldPosition(world);
+        const p = projectWorldToScreen(world);
+        acc.x += p.x; acc.y += p.y;
+        return acc;
+      }, { x: 0, y: 0 });
+      return { x: total.x / stickerList.length, y: total.y / stickerList.length };
+    }
+
+    function pushParticles(x, y, count, config = {}) {
+      const colors = config.colors || ['255,255,255'];
+      const life = config.life || 40;
+      const speed = config.speed || 3;
+      const gravity = config.gravity ?? 0.04;
+      const size = config.size || 4;
+      const shape = config.shape || 'square';
+
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const magnitude = speed * (0.4 + Math.random() * 0.8);
+        fxParticles.push({
+          x, y,
+          vx: Math.cos(angle) * magnitude,
+          vy: Math.sin(angle) * magnitude - (shape === 'smoke' ? 0.6 : 0),
+          life: life * (0.75 + Math.random() * 0.5),
+          maxLife: life * (0.75 + Math.random() * 0.5),
+          gravity,
+          size: size * (0.7 + Math.random() * 0.8),
+          color: colors[Math.floor(Math.random() * colors.length)],
+          shape
+        });
+      }
+    }
+
+    function triggerEffect(slot, payload = {}) {
+      const effect = currentEquippedEffect(slot);
+      if (!effect) return;
+      const point = centerPointForStickers(payload.stickers);
+
+      if (effect.name === 'Confetti Pop') {
+        pushParticles(point.x, point.y, 18, { colors: ['255,82,82','255,209,102','77,213,153','104,195,255','201,125,255'], life: 36, speed: 3.2, gravity: 0.07, size: 5, shape: 'square' });
+      } else if (effect.name === 'Smoke Puff') {
+        pushParticles(point.x, point.y, 18, { colors: ['180,180,180','130,130,130','90,90,90'], life: 30, speed: 1.1, gravity: -0.01, size: 14, shape: 'smoke' });
+      } else if (effect.name === 'Static Flicker') {
+        pushParticles(point.x, point.y, 18, { colors: ['235,235,235','140,180,255','255,255,255'], life: 18, speed: 4.5, gravity: 0.02, size: 3, shape: 'line' });
+      } else if (effect.name === 'Medical Pulse') {
+        pushParticles(point.x, point.y, 20, { colors: ['255,80,80','255,140,140','255,210,210'], life: 22, speed: 2.5, gravity: 0.03, size: 5, shape: 'circle' });
+      } else if (effect.name === 'Gold Spark') {
+        pushParticles(window.innerWidth * 0.5, window.innerHeight * 0.4, 32, { colors: ['255,222,89','255,201,48','255,240,170'], life: 48, speed: 3.5, gravity: 0.05, size: 4, shape: 'circle' });
+      } else if (effect.name === 'Firework Pop') {
+        pushParticles(window.innerWidth * 0.5, window.innerHeight * 0.36, 46, { colors: ['255,75,75','255,255,255','77,150,255','255,221,92'], life: 52, speed: 4.3, gravity: 0.05, size: 4, shape: 'circle' });
+      }
+    }
+
+    function renderAmbientEffect() {
+      const ambient = currentEquippedEffect('ambient');
+      if (!ambient) return;
+
+      if (ambient.name === 'That One Movie') {
+        effectCtx.save();
+        effectCtx.globalAlpha = 0.4;
+        effectCtx.font = '16px monospace';
+        effectCtx.textAlign = 'center';
+        effectCtx.fillStyle = '#46ff7a';
+        ambientState.forEach(drop => {
+          effectCtx.fillText(Math.random() > 0.5 ? '1' : '0', drop.x, drop.y);
+          drop.y += drop.speed;
+          if (drop.y > window.innerHeight + 20) {
+            drop.y = -20 - Math.random() * 140;
+            drop.x += (Math.random() - 0.5) * 14;
+            if (drop.x < 0) drop.x = window.innerWidth;
+            if (drop.x > window.innerWidth) drop.x = 0;
+          }
+        });
+        effectCtx.restore();
+      } else if (ambient.name === 'Noir Rain') {
+        effectCtx.save();
+        effectCtx.globalAlpha = 0.33;
+        effectCtx.strokeStyle = 'rgba(245,245,255,0.5)';
+        effectCtx.lineWidth = 1.1;
+        ambientState.forEach(drop => {
+          effectCtx.beginPath();
+          effectCtx.moveTo(drop.x, drop.y);
+          effectCtx.lineTo(drop.x - 8, drop.y + drop.len);
+          effectCtx.stroke();
+          drop.y += drop.speed;
+          drop.x -= 0.9;
+          if (drop.y > window.innerHeight + drop.len) {
+            drop.y = -drop.len;
+            drop.x = Math.random() * window.innerWidth;
+          }
+          if (drop.x < -10) drop.x = window.innerWidth + Math.random() * 30;
+        });
+        effectCtx.restore();
+      }
+    }
+
+    function renderParticles() {
+      fxParticles = fxParticles.filter(p => p.life > 0);
+      fxParticles.forEach(p => {
+        const alpha = Math.max(0, p.life / p.maxLife);
+        effectCtx.save();
+        effectCtx.globalAlpha = alpha * 0.9;
+        effectCtx.fillStyle = `rgba(${p.color},${alpha})`;
+        effectCtx.strokeStyle = `rgba(${p.color},${alpha})`;
+
+        if (p.shape === 'square') {
+          effectCtx.fillRect(p.x - p.size * 0.5, p.y - p.size * 0.5, p.size, p.size * 1.4);
+        } else if (p.shape === 'smoke') {
+          effectCtx.beginPath();
+          effectCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          effectCtx.fill();
+        } else if (p.shape === 'line') {
+          effectCtx.lineWidth = 1.6;
+          effectCtx.beginPath();
+          effectCtx.moveTo(p.x, p.y);
+          effectCtx.lineTo(p.x + p.vx * 2, p.y + p.vy * 2);
+          effectCtx.stroke();
+        } else {
+          effectCtx.beginPath();
+          effectCtx.arc(p.x, p.y, p.size * 0.7, 0, Math.PI * 2);
+          effectCtx.fill();
+        }
+
+        effectCtx.restore();
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.life -= 1;
+      });
+    }
+
+    function renderEffectsOverlay() {
+      effectCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      renderAmbientEffect();
+      renderParticles();
+    }
+
+addEventListener('resize', () => {
+      resizeEffectOverlay();
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
@@ -5610,6 +6271,7 @@
     function animate() {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
+      renderEffectsOverlay();
     }
 
     async function bootGame() {
@@ -5617,9 +6279,12 @@
 
       loadGame();
       applyEquippedSkin();
+      effectState = normalizeEffectState(effectState);
+      resizeEffectOverlay();
       dailyState = normalizeDailyState(dailyState);
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       startNewMissions();
+      checkEffectUnlocks();
       updateWordDisplay();
       updateScoreDisplay();
       updateVendorDisplay();
