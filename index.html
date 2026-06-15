@@ -644,6 +644,17 @@
       font-size: 16px;
       font-weight: 900;
     }
+    .skin-shop-list { display: grid; gap: 10px; margin-top: 10px; }
+    .skin-card { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.055); }
+    .skin-card.locked { opacity: .68; }
+    .skin-card.owned { border-color: rgba(114,245,177,.35); background: rgba(114,245,177,.07); }
+    .skin-swatch { display: grid; grid-template-columns: repeat(3,18px); grid-template-rows: repeat(2,18px); gap: 3px; padding: 6px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.12); }
+    .skin-swatch-tile { border-radius: 4px; border: 1px solid rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    .skin-shop-name { font-weight: 950; color: #f4f4f4; }
+    .skin-shop-desc { color: #b9c0cf; font-size: .82rem; line-height: 1.35; margin-top: 3px; }
+    .skin-shop-status { color: #f0d520; font-size: .78rem; margin-top: 4px; font-weight: 850; }
+    .skin-card button { white-space: nowrap; }
+
     .hint-shop-list {
       display: grid;
       gap: 8px;
@@ -878,6 +889,10 @@
 
       <div class="vendor-section-title">Paid Hints For Honest Cheating</div>
       <div id="vendorHintList" class="hint-shop-list"></div>
+
+      <div class="vendor-section-title">Skins For Financially Questionable Squares</div>
+      <div class="journal-card-text">Vendor Unlocks are bought after the stunt. Achievement Skins are earned and equipped here after the cube finishes pretending cosmetics are a personality.</div>
+      <div id="vendorSkinList" class="skin-shop-list"></div>
     </div>
   </div>
 
@@ -903,12 +918,14 @@
         <button class="journal-tab active" data-journal-tab="stats">Stats</button>
         <button class="journal-tab" data-journal-tab="items">Items</button>
         <button class="journal-tab" data-journal-tab="hints">Hints</button>
+        <button class="journal-tab" data-journal-tab="skins">Skins</button>
         <button class="journal-tab" data-journal-tab="achievements">Achievements</button>
       </div>
 
       <div id="journalStats" class="journal-section active"></div>
       <div id="journalItems" class="journal-section"></div>
       <div id="journalHints" class="journal-section"></div>
+      <div id="journalSkins" class="journal-section"></div>
       <div id="journalAchievements" class="journal-section"></div>
     </div>
   </div>
@@ -932,6 +949,17 @@
       </div>
       <div id="dailyCompleteReward" class="achievement-reward"></div>
       <button class="celebration-button" data-close-modal>Accept Today’s Bribe</button>
+    </div>
+  </div>
+
+  <div id="skinUnlockModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="skinUnlockTitle">
+      <div class="modal-header"><div id="skinUnlockTitle" class="modal-title">New Skin Available</div><button class="modal-close" data-close-modal aria-label="Close skin unlock">×</button></div>
+      <div class="achievement-popup-header"><div id="skinUnlockIcon" class="achievement-icon" style="--achievement-hue:38;">🎨</div><div id="skinUnlockTier" class="achievement-tier">COSMETIC NONSENSE DETECTED</div></div>
+      <div id="skinUnlockName" class="celebration-title"></div>
+      <div class="celebration-body"><p id="skinUnlockDescription"></p></div>
+      <div id="skinUnlockReward" class="achievement-reward"></div>
+      <button class="celebration-button" data-close-modal>Accept the Paint-Based Life Choice</button>
     </div>
   </div>
 
@@ -1171,6 +1199,7 @@
     const vendorItemList = document.getElementById('vendorItemList');
     const vendorItemBuy = document.getElementById('vendorItemBuy');
     const vendorHintList = document.getElementById('vendorHintList');
+    const vendorSkinList = document.getElementById('vendorSkinList');
     const vowelQty = document.getElementById('vowelQty');
     const inventoryList = document.getElementById('inventoryList');
     const vendorModal = document.getElementById('vendorModal');
@@ -1192,7 +1221,15 @@
     const journalStats = document.getElementById('journalStats');
     const journalItems = document.getElementById('journalItems');
     const journalHints = document.getElementById('journalHints');
+    const journalSkins = document.getElementById('journalSkins');
     const journalAchievements = document.getElementById('journalAchievements');
+    const skinUnlockModal = document.getElementById('skinUnlockModal');
+    const skinUnlockTitle = document.getElementById('skinUnlockTitle');
+    const skinUnlockIcon = document.getElementById('skinUnlockIcon');
+    const skinUnlockTier = document.getElementById('skinUnlockTier');
+    const skinUnlockName = document.getElementById('skinUnlockName');
+    const skinUnlockDescription = document.getElementById('skinUnlockDescription');
+    const skinUnlockReward = document.getElementById('skinUnlockReward');
     const achievementModal = document.getElementById('achievementModal');
     const achievementIcon = document.getElementById('achievementIcon');
     const achievementTier = document.getElementById('achievementTier');
@@ -1298,6 +1335,7 @@
     let hasSeenFirstCashout = false;
     let hasSeenFirstSwappyPop = false;
     let lifetimeStats = null;
+    let skinState = { vendorUnlocked: {}, owned: { classic: true }, equipped: 'classic' };
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
@@ -1313,6 +1351,7 @@
     let pendingHintUnlockCelebrations = [];
     let pendingAchievementCelebrations = [];
     let pendingDailyCompletionCelebrations = [];
+    let pendingSkinUnlockCelebrations = [];
     let roundStats = null;
     let pendingConsonants = 0;
     let pendingVowels = 0;
@@ -1321,6 +1360,24 @@
     let dailyMode = false;
     let activeDailyDay = null;
     let dailyForcedLetterPool = null;
+
+
+    const CUBE_SKINS = {
+      classic: { name:'Classic Cube', type:'default', price:0, icon:'⬛', requirement:'Default cube.', unlockText:'Owned by default.', colors:{ right:0xd62929,left:0xf28c28,top:0xf4f4f4,bottom:0xf0d520,front:0x1da64a,back:0x275dd6,inside:0x08090b }, textColor:'#111318' },
+      flagCube: { name:'Flag Cube', type:'vendor', price:2500, rankRequired:5, icon:'🇺🇸', requirement:'Rank 5 and use U, S, and A in valid words during one round.', unlockText:`New Skin Available:\nFlag Cube!\n\nYou used U, S, and A in a single round, and the vendor has mistaken this for patriotism.\n\nYou may now purchase a patriotic cube skin for 2,500 SlopCoin, because it was the nation’s 250th birthday when this was decided, and adding one more zero is extra American.\n\nDisplay your undying love for economic black magic, suspicious pricing, and colored squares that somehow became a personality test.\n\nBut at least there are hot dogs.`, colors:{ right:0xc8102e,left:0xffffff,top:0x002868,bottom:0xffffff,front:0x002868,back:0xc8102e,inside:0x06070c }, textColor:'#111318' },
+      pumpkinGuts: { name:'Pumpkin Guts', type:'vendor', price:1031, rankRequired:10, icon:'🎃', requirement:'Rank 10 and clear 31 tiles in one round.', unlockText:'New Skin Available:\nPumpkin Guts!\n\nThe cube has been hollowed out, given a face, and somehow still looks less cursed than the original.\n\nYou may now purchase Pumpkin Guts for 1,031 SlopCoin, because seasonal horror apparently has a retail strategy.', colors:{ right:0xff7a18,left:0xd95f02,top:0x2f9e44,bottom:0x5c2f13,front:0xff8c1a,back:0x3a1f0f,inside:0x120904 }, textColor:'#15110b' },
+      urgentScare: { name:'Urgent Scare', type:'vendor', price:2750, rankRequired:10, icon:'🏥', requirement:'Rank 10 and spell NURSE or DOCTOR.', unlockText:'New Skin Available:\nUrgent Scare!\n\nYou spelled NURSE or DOCTOR, and the vendor has unlocked a medical cube skin with a red cross, sterile white tiles, and the emotional warmth of a waiting room fish tank.\n\nNo appointment required. Payment absolutely required.', colors:{ right:0xd71920,left:0xffffff,top:0xffffff,bottom:0xb9d8e8,front:0xffffff,back:0x8fa7b2,inside:0x08090b }, textColor:'#111318' },
+      taxpayerSpecial: { name:'Taxpayer Special', type:'vendor', price:1776, rankRequired:15, icon:'🧾', requirement:'Rank 15 and spend 1,776 lifetime SlopCoin at the vendor.', unlockText:'New Skin Available:\nTaxpayer Special!\n\nYou spent 1,776 SlopCoin at the vendor, which triggered a patriotic procurement event and at least one suspicious invoice.\n\nThe cube is now eligible for a red, white, and blue coating that looks like it was approved by three committees, two contractors, and a printer that still makes fax noises.', colors:{ right:0xa92a2a,left:0xe8e1ce,top:0x2e4d7d,bottom:0xc0b59b,front:0xd8d1bd,back:0x743d3d,inside:0x07080b }, textColor:'#151515' },
+      truckStopFloor: { name:'Truck Stop Floor', type:'vendor', price:1250, rankRequired:10, icon:'🧽', requirement:'Rank 10 and submit 50 invalid words.', unlockText:'New Skin Available:\nTruck Stop Floor!\n\nYou submitted enough illegal words to make the dictionary put on shoes in the shower.\n\nThe vendor has unlocked a cube skin with the visual texture of bad lighting, sticky tile, and a mop that gave up before smartphones existed.', colors:{ right:0x6b4a2f,left:0x8b7a5e,top:0xd4b35f,bottom:0x4b4234,front:0x8f3d2d,back:0x5f6b3a,inside:0x090806 }, textColor:'#120d09' },
+      candyRot: { name:'Candy Rot', type:'vendor', price:1500, rankRequired:5, icon:'🍬', requirement:'Rank 5 and use 10 Swappy Pops.', unlockText:'New Skin Available:\nCandy Rot!\n\nYou used enough Swappy Pops to make the cube legally classify you as a mobile candy incident.\n\nThe vendor has unlocked a sticky, colorful skin that looks cheerful from far away and medically questionable up close.', colors:{ right:0xff3ea5,left:0x73fbd3,top:0xfff275,bottom:0xb388ff,front:0xff7a59,back:0x55c7ff,inside:0x090612 }, textColor:'#171017' },
+      slopChainGreen: { name:'SlopChain Green', type:'vendor', price:2500, rankRequired:15, icon:'🟩', requirement:'Rank 15 and bank 2,500 lifetime SlopCoin.', unlockText:'New Skin Available:\nSlopChain Green!\n\nYou banked enough SlopCoin for the vendor to describe your behavior as “liquidity,” which is finance language for “we found a new bucket.”\n\nA green cube skin is now available, perfect for fake currency, real effort, and the smell of financial moss.', colors:{ right:0x0fbf5f,left:0x0a7f45,top:0xd6ffe5,bottom:0x083f2a,front:0x17e889,back:0x095b35,inside:0x03120b }, textColor:'#06120a' },
+      goldPlatedFraud: { name:'Gold Plated Fraud', type:'vendor', price:5000, rankRequired:20, icon:'🏆', requirement:'Rank 20 and bank 5,000 lifetime SlopCoin.', unlockText:'New Skin Available:\nGold Plated Fraud!\n\nYou banked enough SlopCoin for the vendor to whisper the word “premium” into a calculator and smile without blinking.\n\nA gold cube skin is now available, because nothing says success like painting garbage shiny and calling it an asset class.', colors:{ right:0xffc94a,left:0xb88918,top:0xfff2b0,bottom:0x5c4210,front:0xe2a725,back:0x6f5014,inside:0x140f05 }, textColor:'#171005' },
+      wetCardboard: { name:'Wet Cardboard', type:'achievement', icon:'📦', requirement:'Abandon 10 rounds.', unlockText:'Skin Unlocked:\nWet Cardboard!\n\nYou abandoned enough rounds that the cube has adopted the texture of a box left outside during a storm and then promoted to middle management.\n\nNo purchase required. This soggy little consequence is yours.', colors:{ right:0x8b6f4e,left:0x6f5d43,top:0xb39b72,bottom:0x4a3b2b,front:0x9a815d,back:0x5d4a37,inside:0x070604 }, textColor:'#17120b' },
+      corporateBeige: { name:'Corporate Beige', type:'achievement', icon:'🗂️', requirement:'Earn 10 A grades.', unlockText:'Skin Unlocked:\nCorporate Beige!\n\nYou earned enough A grades to qualify for the most dangerous reward in the workplace: being considered reliable.\n\nThe cube has been repainted in the official colors of meetings that should have been emails.', colors:{ right:0xc8bca4,left:0xb8aa90,top:0xf1eadc,bottom:0x8a8274,front:0xd7cfbd,back:0x9c927e,inside:0x090806 }, textColor:'#171511' },
+      noirPhase: { name:'Noir Phase', type:'achievement', icon:'🎞️', requirement:'Make ten 7-letter words.', unlockText:'Skin Unlocked:\nNoir Phase!\n\nThe cube has entered black-and-white mode because apparently even geometry goes through a goth phase.\n\nEvery letter now looks like it knows something, but refuses to testify.', colors:{ right:0x0d0d0f,left:0x2c2c31,top:0xf1f1f1,bottom:0x55555f,front:0xb8b8c1,back:0x17171d,inside:0x050507 }, textColor:'#f4f4f4' },
+      voidCube: { name:'Void Cube', type:'achievement', icon:'🕳️', requirement:'Clear 10 full faces lifetime.', unlockText:'Skin Unlocked:\nVoid Cube!\n\nYou cleared enough cube faces that the remaining colors started asking if existence was optional.\n\nThe cube has been dipped in premium nothingness. Do not stare too long. It stares back with excellent posture.', colors:{ right:0x050509,left:0x101018,top:0x232337,bottom:0x000000,front:0x151525,back:0x080810,inside:0x000000 }, textColor:'#f4f4f4' },
+      platinumCube: { name:'Platinum Cube', type:'achievement', icon:'💿', requirement:'Reach Rank 50.', unlockText:'Skin Unlocked:\nPlatinum Cube!\n\nYou reached the final rank, which means you have converted time, stubbornness, and questionable judgment into a shiny object.\n\nThe cube has awarded you platinum status. This does not include lounge access, dental coverage, or emotional closure.', colors:{ right:0xe5e9f0,left:0xbec7d4,top:0xffffff,bottom:0x8f9aaa,front:0xd9dee8,back:0xaeb8c8,inside:0x08090b }, textColor:'#10131a' }
+    };
 
     const LETTER_VALUES = {
       A: 1, E: 1, I: 1, L: 1, N: 1, O: 1, R: 1, S: 1, T: 1, U: 1,
@@ -1416,6 +1473,8 @@
       firstSwappyPopModal.setAttribute('aria-hidden', 'true');
       itemUnlockModal.classList.remove('open');
       itemUnlockModal.setAttribute('aria-hidden', 'true');
+      skinUnlockModal.classList.remove('open');
+      skinUnlockModal.setAttribute('aria-hidden', 'true');
     }
 
     function openMenu(menuName) {
@@ -1979,7 +2038,12 @@
         }
 
         if (reward.type === 'skin') {
-          lifetimeStats.skinsUnlocked = pushUnique(lifetimeStats.skinsUnlocked, reward.name);
+          const skinEntry = Object.entries(CUBE_SKINS).find(([, skin]) => skin.name === reward.name);
+          if (skinEntry) {
+            awardAchievementSkin(skinEntry[0]);
+          } else {
+            lifetimeStats.skinsUnlocked = pushUnique(lifetimeStats.skinsUnlocked, reward.name);
+          }
           parts.push(`Cube skin unlocked: ${reward.name}`);
           return;
         }
@@ -2042,6 +2106,8 @@
           unlockAchievement(achievement, options);
         }
       }
+
+      checkSkinUnlocks();
     }
 
     function achievementIconHtml(achievement) {
@@ -2127,7 +2193,9 @@
         skinsUnlocked: [],
         effectsUnlocked: [],
         highestSingleWordScore: 0,
-        longestWord: 0
+        longestWord: 0,
+        sevenLetterWordsMade: 0,
+        medicalWordsSpelled: 0
       };
     }
 
@@ -2149,7 +2217,9 @@
         achievementUnlockOrder: Array.isArray(incoming.achievementUnlockOrder) ? [...incoming.achievementUnlockOrder] : [],
         titlesUnlocked: Array.isArray(incoming.titlesUnlocked) ? [...incoming.titlesUnlocked] : [],
         skinsUnlocked: Array.isArray(incoming.skinsUnlocked) ? [...incoming.skinsUnlocked] : [],
-        effectsUnlocked: Array.isArray(incoming.effectsUnlocked) ? [...incoming.effectsUnlocked] : []
+        effectsUnlocked: Array.isArray(incoming.effectsUnlocked) ? [...incoming.effectsUnlocked] : [],
+        sevenLetterWordsMade: Number(incoming.sevenLetterWordsMade || base.sevenLetterWordsMade || 0),
+        medicalWordsSpelled: Number(incoming.medicalWordsSpelled || base.medicalWordsSpelled || 0)
       };
     }
 
@@ -2211,6 +2281,12 @@
         `;
       }).join('');
 
+      const skinCards = Object.entries(CUBE_SKINS).map(([skinKey, skin]) => {
+        const owned = isSkinOwned(skinKey), vendorUnlocked = isVendorSkinUnlocked(skinKey), equipped = skinState.equipped === skinKey;
+        const status = owned ? (equipped ? 'Equipped. The cube is wearing this mistake right now.' : 'Owned. Available to equip.') : skin.type === 'vendor' ? (vendorUnlocked ? `Available in Vendor for ${skin.price.toLocaleString()} SlopCoin.` : `Locked. ${skin.requirement}`) : `Locked. ${skin.requirement}`;
+        return `<div class="journal-item ${owned ? '' : 'locked'}"><div class="achievement-journal-item">${skinSwatchHtml(skinKey)}<div><div class="achievement-topline"><div class="achievement-name">${skin.name}</div><div class="achievement-meta">${skin.type === 'vendor' ? 'Vendor Skin' : skin.type === 'achievement' ? 'Achievement Skin' : 'Default'}</div></div><div class="journal-item-body">${status}</div><div class="achievement-reward-line"><strong>Requirement:</strong> ${skin.requirement}</div></div></div></div>`;
+      }).join('');
+
       journalStats.innerHTML = `
         <div class="journal-grid">
           ${statCard('Lifetime SlopCoin Earned', lifetimeStats.lifetimeSlopCoinEarned, 'Gross domestic product of your personal trash economy.')}
@@ -2241,7 +2317,7 @@
           ${statCard('Highest Word Score', lifetimeStats.highestSingleWordScore, 'Peak SlopCoin extraction event.')}
           ${statCard('Lifetime XP Earned', lifetimeStats.lifetimeXPEarned, 'Career advancement calories with no nutritional value.')}
           ${statCard('Titles Unlocked', lifetimeStats.titlesUnlocked.length, lifetimeStats.titlesUnlocked.length ? lifetimeStats.titlesUnlocked.join(', ') : 'No titles yet. Your aura remains unbranded.')}
-          ${statCard('Cube Skins Unlocked', lifetimeStats.skinsUnlocked.length, lifetimeStats.skinsUnlocked.length ? lifetimeStats.skinsUnlocked.join(', ') : 'No skins yet. The cube remains in its company-issued shell.')}
+          ${statCard('Cube Skins Unlocked', Object.values(skinState.owned || {}).filter(Boolean).length, `Equipped: ${skinDefinition(skinState.equipped).name}`)}
         </div>
 
         <h3>Word Length Counts</h3>
@@ -2295,6 +2371,12 @@
         </div>
       `;
 
+      journalSkins.innerHTML = `
+        <div class="journal-list">
+          ${skinCards}
+        </div>
+      `;
+
       journalAchievements.innerHTML = `
         <div class="journal-list">
           ${achievementCards}
@@ -2323,7 +2405,8 @@
         consonantsBought: 0,
         itemsBought: {},
         hintsBought: {},
-        itemsUsedThisRound: {}
+        itemsUsedThisRound: {},
+        lettersUsed: {}
       };
     }
 
@@ -2375,7 +2458,6 @@
         ${recapCard('Earned', `${summary.earned.toLocaleString()} SlopCoin`)}
         ${recapCard('Spent', `${summary.spent.toLocaleString()} SlopCoin`, summary.spent > 0 ? 'recap-loss' : '')}
         ${recapCard('Net Profit', `${netPrefix}${summary.netProfit.toLocaleString()} SlopCoin`, netClass)}
-        ${recapCard('Actually Banked', `${summary.banked.toLocaleString()} SlopCoin`)}
         ${recapCard('Valid Words', summary.validWords.toLocaleString())}
         ${recapCard('Illegal Attempts', summary.invalidWords.toLocaleString(), summary.invalidWords > 0 ? 'recap-loss' : '')}
         ${recapCard('Tiles Cleared', summary.tilesCleared.toLocaleString())}
@@ -2789,6 +2871,7 @@
       roundStats.tilesCleared += submittedPath.length;
       roundStats.scoreEarned += score.points;
       roundStats.longestWord = Math.max(roundStats.longestWord, word.length);
+      [...word.toUpperCase()].forEach(letter => { if (/^[A-Z]$/.test(letter)) roundStats.lettersUsed[letter] = true; });
       roundStats.rareLettersUsed += [...word.toUpperCase()].filter(letter => 'QXZJ'.includes(letter)).length;
       roundStats.vendorLettersUsed += submittedPath.filter(sticker => sticker.userData.source === 'vendor').length;
       roundStats.facesCleared += newlyClearedFaces;
@@ -2975,6 +3058,12 @@
         return true;
       }
 
+      if (pendingSkinUnlockCelebrations.length > 0) {
+        const payload = pendingSkinUnlockCelebrations.shift();
+        showSkinUnlockCelebration(payload);
+        return true;
+      }
+
       if (pendingAchievementCelebrations.length > 0) {
         const payload = pendingAchievementCelebrations.shift();
         showAchievementCelebration(payload);
@@ -2996,6 +3085,53 @@
         ...DEFAULT_INVENTORY,
         ...(value && typeof value === 'object' ? value : {})
       };
+    }
+
+    function normalizeSkinState(value) {
+      const incoming = value && typeof value === 'object' ? value : {};
+      return { vendorUnlocked: { ...(incoming.vendorUnlocked || {}) }, owned: { classic: true, ...(incoming.owned || {}) }, equipped: CUBE_SKINS[incoming.equipped] ? incoming.equipped : 'classic' };
+    }
+    function skinDefinition(skinKey) { return CUBE_SKINS[skinKey] || CUBE_SKINS.classic; }
+    function isSkinOwned(skinKey) { skinState = normalizeSkinState(skinState); return Boolean(skinState.owned[skinKey]); }
+    function isVendorSkinUnlocked(skinKey) { skinState = normalizeSkinState(skinState); const skin = skinDefinition(skinKey); return Boolean(skin.type === 'vendor' && skinState.vendorUnlocked[skinKey]); }
+    function skinUnlockRequirementMet(skinKey) {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      const skin = skinDefinition(skinKey);
+      if (skin.rankRequired && rank < skin.rankRequired) return false;
+      if (skinKey === 'flagCube') return Boolean(roundStats?.lettersUsed?.U && roundStats?.lettersUsed?.S && roundStats?.lettersUsed?.A);
+      if (skinKey === 'pumpkinGuts') return Boolean(roundStats && roundStats.tilesCleared >= 31);
+      if (skinKey === 'urgentScare') return Boolean(lifetimeStats.medicalWordsSpelled > 0);
+      if (skinKey === 'taxpayerSpecial') return lifetimeStats.lifetimeSlopCoinSpent >= 1776;
+      if (skinKey === 'truckStopFloor') return lifetimeStats.invalidWordsSubmitted >= 50;
+      if (skinKey === 'candyRot') return lifetimeStats.swappyPopsUsed >= 10;
+      if (skinKey === 'slopChainGreen') return lifetimeStats.lifetimeSlopCoinBanked >= 2500;
+      if (skinKey === 'goldPlatedFraud') return lifetimeStats.lifetimeSlopCoinBanked >= 5000;
+      if (skinKey === 'wetCardboard') return lifetimeStats.abandonedRounds >= 10;
+      if (skinKey === 'corporateBeige') return (lifetimeStats.gradeCounts.A || 0) >= 10;
+      if (skinKey === 'noirPhase') return lifetimeStats.sevenLetterWordsMade >= 10;
+      if (skinKey === 'voidCube') return lifetimeStats.facesCleared >= 10;
+      if (skinKey === 'platinumCube') return rank >= 50;
+      return false;
+    }
+    function queueSkinUnlockCelebration(skinKey, mode) { pendingSkinUnlockCelebrations.push({ skinKey, mode }); }
+    function unlockVendorSkin(skinKey) { skinState = normalizeSkinState(skinState); if (skinState.vendorUnlocked[skinKey] || skinState.owned[skinKey]) return false; skinState.vendorUnlocked[skinKey] = true; queueSkinUnlockCelebration(skinKey, 'vendor'); return true; }
+    function awardAchievementSkin(skinKey) { skinState = normalizeSkinState(skinState); if (skinState.owned[skinKey]) return false; skinState.owned[skinKey] = true; lifetimeStats = normalizeLifetimeStats(lifetimeStats); lifetimeStats.skinsUnlocked = pushUnique(lifetimeStats.skinsUnlocked, skinDefinition(skinKey).name); queueSkinUnlockCelebration(skinKey, 'achievement'); return true; }
+    function checkSkinUnlocks() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats); skinState = normalizeSkinState(skinState);
+      Object.entries(CUBE_SKINS).forEach(([skinKey, skin]) => {
+        if (skin.type === 'default') return;
+        if (skin.type === 'vendor') { if (!skinState.vendorUnlocked[skinKey] && !skinState.owned[skinKey] && skinUnlockRequirementMet(skinKey)) unlockVendorSkin(skinKey); return; }
+        if (skin.type === 'achievement' && !skinState.owned[skinKey] && skinUnlockRequirementMet(skinKey)) awardAchievementSkin(skinKey);
+      });
+      saveGame(); updateVendorSkinShop();
+    }
+    function showSkinUnlockCelebration(payload) {
+      const skin = skinDefinition(payload.skinKey); const isVendorUnlock = payload.mode === 'vendor';
+      closeMenus(); skinUnlockTitle.textContent = isVendorUnlock ? 'New Skin Available' : 'Skin Unlocked'; skinUnlockIcon.textContent = skin.icon || '🎨'; skinUnlockTier.textContent = isVendorUnlock ? 'VENDOR UNLOCK' : 'ACHIEVEMENT SKIN'; skinUnlockName.textContent = skin.name;
+      const lines = String(skin.unlockText || `${skin.name} unlocked.`).split('\n');
+      skinUnlockDescription.innerHTML = lines.map(line => line.trim()).filter(Boolean).join('<br><br>');
+      skinUnlockReward.innerHTML = isVendorUnlock ? `<strong>Vendor Price:</strong> ${skin.price.toLocaleString()} SlopCoin` : '<strong>Reward:</strong> Skin owned. Equip it in Vendor → Skins.';
+      skinUnlockModal.classList.add('open'); skinUnlockModal.setAttribute('aria-hidden', 'false'); launchConfetti();
     }
 
     function addInventoryItem(itemKey, count = 1) {
@@ -3727,6 +3863,7 @@
         hasSeenFirstSwappyPop,
         dailyState: normalizeDailyState(dailyState),
         lifetimeStats: normalizeLifetimeStats(lifetimeStats),
+        skinState: normalizeSkinState(skinState),
         inventory: normalizeInventory(inventory)
       };
 
@@ -3746,6 +3883,7 @@
         hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
         dailyState = normalizeDailyState(save.dailyState);
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
+        skinState = normalizeSkinState(save.skinState);
         inventory = normalizeInventory(save.inventory);
 
         Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
@@ -3771,6 +3909,7 @@
         totalXP = 0;
         rank = 1;
         dailyState = normalizeDailyState(null);
+        skinState = normalizeSkinState(null);
       }
     }
 
@@ -3898,6 +4037,7 @@
 
       updateVendorItemShop();
       updateVendorHintShop();
+      updateVendorSkinShop();
     }
 
     function updateVendorItemShop() {
@@ -3986,6 +4126,20 @@
           </div>
         `;
       }
+    }
+
+    function skinSwatchHtml(skinKey) {
+      const skin = skinDefinition(skinKey); const colors = skin.colors || CUBE_SKINS.classic.colors;
+      return `<div class="skin-swatch" title="${skin.name}">${['right','left','top','bottom','front','back'].map(faceKey => `<div class="skin-swatch-tile" style="background:#${(colors[faceKey] || 0).toString(16).padStart(6,'0')}"></div>`).join('')}</div>`;
+    }
+    function skinStatusText(skinKey) { const skin=skinDefinition(skinKey); if(isSkinOwned(skinKey)) return skinState.equipped===skinKey?'Owned · Equipped':'Owned'; if(skin.type==='vendor'&&isVendorSkinUnlocked(skinKey)) return `Available · ${skin.price.toLocaleString()} SlopCoin`; if(skin.type==='achievement') return `Achievement reward · ${skin.requirement}`; return `Locked · ${skin.requirement}`; }
+    function updateVendorSkinShop() {
+      if (!vendorSkinList) return; skinState = normalizeSkinState(skinState); vendorSkinList.innerHTML = '';
+      const renderSkin = ([skinKey, skin]) => { const owned=isSkinOwned(skinKey), equipped=skinState.equipped===skinKey, vendorUnlocked=skin.type==='vendor'&&isVendorSkinUnlocked(skinKey), canBuy=vendorUnlocked&&!owned&&bankedScore>=skin.price; const row=document.createElement('div'); row.className=`skin-card ${owned?'owned':''} ${!owned&&!vendorUnlocked&&skin.type!=='default'?'locked':''}`; row.innerHTML=`${skinSwatchHtml(skinKey)}<div><div class="skin-shop-name">${skin.name}</div><div class="skin-shop-desc">${skin.requirement}</div><div class="skin-shop-status">${skinStatusText(skinKey)}</div></div><div>${owned?`<button data-equip-skin="${skinKey}" ${equipped?'disabled':''}>${equipped?'Equipped':'Equip'}</button>`:skin.type==='vendor'&&vendorUnlocked?`<button data-buy-skin="${skinKey}" ${canBuy?'':'disabled'}>Buy</button>`:`<button disabled>Locked</button>`}</div>`; vendorSkinList.appendChild(row); };
+      const vendorHeader=document.createElement('div'); vendorHeader.className='vendor-section-title'; vendorHeader.textContent='Vendor Unlocks'; vendorSkinList.appendChild(vendorHeader);
+      Object.entries(CUBE_SKINS).filter(([,skin])=>skin.type==='vendor').forEach(renderSkin);
+      const achievementHeader=document.createElement('div'); achievementHeader.className='vendor-section-title'; achievementHeader.textContent='Achievement Skins'; vendorSkinList.appendChild(achievementHeader);
+      Object.entries(CUBE_SKINS).filter(([,skin])=>skin.type!=='vendor').forEach(renderSkin);
     }
 
     function randomVowel() {
@@ -4269,13 +4423,19 @@
       return roundLetterPool.pop();
     }
 
-    function textColorForBackground(color) {
-      // Level 1 uses light face colors, so every letter stays black.
-      // Later levels can swap this back to contrast-aware coloring.
-      return '#111318';
+    function textColorForBackground(color, faceKey = null) {
+      const skin = skinDefinition(skinState?.equipped || 'classic');
+      if (skin.textColor) return skin.textColor;
+      const r = (color >> 16) & 255, g = (color >> 8) & 255, b = color & 255;
+      return ((0.299*r + 0.587*g + 0.114*b) / 255) < 0.42 ? '#f4f4f4' : '#111318';
+    }
+    function drawSkinPattern(ctx, skinKey, faceKey) {
+      if (skinKey === 'flagCube' && faceKey === 'front') { ctx.fillStyle='rgba(255,255,255,.92)'; for(let r=0;r<3;r++) for(let c=0;c<4;c++){ ctx.beginPath(); ctx.arc(42+c*50,42+r*42,6,0,Math.PI*2); ctx.fill(); } }
+      if (skinKey === 'urgentScare' && faceKey === 'front') { ctx.fillStyle='#d71920'; ctx.fillRect(108,38,40,180); ctx.fillRect(38,108,180,40); }
+      if (skinKey === 'pumpkinGuts' && faceKey === 'front') { ctx.fillStyle='rgba(15,10,5,.82)'; ctx.beginPath(); ctx.moveTo(70,78); ctx.lineTo(100,126); ctx.lineTo(42,126); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(186,78); ctx.lineTo(216,126); ctx.lineTo(158,126); ctx.closePath(); ctx.fill(); ctx.fillRect(78,172,100,18); ctx.fillRect(100,190,26,18); ctx.fillRect(152,190,26,18); }
     }
 
-    function createLetterTexture(color, letter, selected = false, hintStart = false) {
+    function createLetterTexture(color, letter, selected = false, hintStart = false, faceKey = null) {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 256;
@@ -4283,6 +4443,7 @@
 
       ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
       ctx.fillRect(0, 0, 256, 256);
+      drawSkinPattern(ctx, skinState?.equipped || 'classic', faceKey);
 
       if (hintStart) {
         ctx.strokeStyle = '#f0d520';
@@ -4300,7 +4461,7 @@
         ctx.strokeRect(9, 9, 238, 238);
       }
 
-      ctx.fillStyle = textColorForBackground(color);
+      ctx.fillStyle = textColorForBackground(color, faceKey);
       ctx.font = 'bold 152px Inter, Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -4341,7 +4502,8 @@
             sticker.userData.color,
             sticker.userData.letter,
             sticker.userData.selected,
-            sticker.userData.hintStart
+            sticker.userData.hintStart,
+            sticker.userData.faceKey
           );
 
       sticker.material.opacity = sticker.userData.used ? 0.9 : 1;
@@ -4378,6 +4540,9 @@
       cubie.userData.stickers.forEach(sticker => orientSticker(cubie, sticker));
     }
 
+    function skinColorForFace(faceKey) { const skin = skinDefinition(skinState?.equipped || 'classic'); return (skin.colors && skin.colors[faceKey]) || COLOR[faceKey] || COLOR.front; }
+    function applyEquippedSkin() { skinState = normalizeSkinState(skinState); stickers.forEach(sticker => { sticker.userData.faceKey = sticker.userData.faceKey || faceKeyFromNormal(sticker.userData.localNormal); sticker.userData.color = skinColorForFace(sticker.userData.faceKey); refreshStickerTexture(sticker); }); cubies.forEach(cubie => { if (cubie.material) { cubie.material.color.setHex(skinDefinition(skinState.equipped).colors?.inside || COLOR.inside); cubie.material.needsUpdate = true; } }); }
+
     function createSticker(cubie, normal, color) {
       const geometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
       const letter = randomLetter();
@@ -4385,7 +4550,7 @@
       const sticker = new THREE.Mesh(
         geometry,
         new THREE.MeshBasicMaterial({
-          map: createLetterTexture(color, letter),
+          map: createLetterTexture(skinColorForFace(faceKeyFromNormal(normal)), letter, false, false, faceKeyFromNormal(normal)),
           side: THREE.FrontSide,
           transparent: true
         })
@@ -4393,7 +4558,8 @@
 
       sticker.position.copy(normal).multiplyScalar(STICKER_OFFSET);
       sticker.userData.localNormal = normal.clone();
-      sticker.userData.color = color;
+      sticker.userData.faceKey = faceKeyFromNormal(normal);
+      sticker.userData.color = skinColorForFace(sticker.userData.faceKey);
       sticker.userData.letter = letter;
       sticker.userData.selected = false;
       sticker.userData.used = false;
@@ -4982,8 +5148,11 @@
       lifetimeStats.vendorLettersUsed += submittedPath.filter(sticker => sticker.userData.source === 'vendor').length;
       lifetimeStats.highestSingleWordScore = Math.max(lifetimeStats.highestSingleWordScore, score.points);
       lifetimeStats.longestWord = Math.max(lifetimeStats.longestWord, word.length);
+      if (word.length >= 7) lifetimeStats.sevenLetterWordsMade += 1;
+      if (word === 'nurse' || word === 'doctor') lifetimeStats.medicalWordsSpelled += 1;
       recordWordLength(word.length);
       handleDailyAcceptedWord(word);
+      checkSkinUnlocks();
 
       updateWordDisplay();
       updateScoreDisplay(score.points);
@@ -5066,8 +5235,11 @@
         sticker.userData.source = 'random';
         sticker.userData.hintStart = false;
         sticker.visible = true;
+        sticker.userData.color = skinColorForFace(sticker.userData.faceKey);
         refreshStickerTexture(sticker);
       });
+
+      applyEquippedSkin();
 
       pivot.quaternion.identity();
       pivot.rotation.set(0, 0, 0);
@@ -5304,6 +5476,12 @@
       }
     });
 
+    vendorSkinList.addEventListener('click', event => {
+      const buyButton = event.target.closest('[data-buy-skin]'); const equipButton = event.target.closest('[data-equip-skin]');
+      if (buyButton) { const skinKey=buyButton.dataset.buySkin; const skin=skinDefinition(skinKey); if(!isVendorSkinUnlocked(skinKey)) return; if(bankedScore < skin.price){ setStatus('Not enough SlopCoin. The vendor softly closes the paint catalog.'); updateVendorDisplay(); return; } bankedScore-=skin.price; lifetimeStats=normalizeLifetimeStats(lifetimeStats); lifetimeStats.lifetimeSlopCoinSpent += skin.price; skinState=normalizeSkinState(skinState); skinState.owned[skinKey]=true; skinState.equipped=skinKey; lifetimeStats.skinsUnlocked=pushUnique(lifetimeStats.skinsUnlocked, skin.name); applyEquippedSkin(); updateScoreDisplay(); updateJournalDisplay(); updateVendorDisplay(); saveGame(); setStatus(`Bought and equipped ${skin.name} for ${skin.price.toLocaleString()} SlopCoin. The vendor says the paint is premium. The receipt says absolutely nothing legally useful.`); return; }
+      if (equipButton) { const skinKey=equipButton.dataset.equipSkin; if(!isSkinOwned(skinKey)) return; skinState=normalizeSkinState(skinState); skinState.equipped=skinKey; applyEquippedSkin(); updateVendorDisplay(); updateJournalDisplay(); saveGame(); setStatus(`${skinDefinition(skinKey).name} equipped. The cube has changed outfits and learned nothing.`); }
+    });
+
     vendorItemBuy.addEventListener('click', () => {
       if (busy) return;
 
@@ -5337,6 +5515,7 @@
       pendingItemPurchases = {};
       updateScoreDisplay();
       updateJournalDisplay();
+      checkSkinUnlocks();
       setStatus(`Bought ${purchaseSummary} for ${totalCost.toLocaleString()} SlopCoin. The vendor grins like the receipt has teeth.`);
       showPendingCelebration();
     });
@@ -5390,11 +5569,13 @@
       updateScoreDisplay();
       updateVendorDisplay();
       updateJournalDisplay();
+      checkSkinUnlocks();
       saveGame();
 
       setStatus(
         `Vendor purchase complete. Bought ${totalLettersToBuy} letter${totalLettersToBuy === 1 ? '' : 's'} for ${totalCost} SlopCoin. The receipt smells like fraud and toner.`
       );
+      showPendingCelebration();
     });
 
     document.getElementById('clear').addEventListener('click', () => {
@@ -5435,6 +5616,7 @@
       await loadExternalWordLists();
 
       loadGame();
+      applyEquippedSkin();
       dailyState = normalizeDailyState(dailyState);
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       startNewMissions();
