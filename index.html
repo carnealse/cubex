@@ -887,6 +887,21 @@
       border: 1px solid rgba(122,199,255,.18);
     }
 
+
+    .pet-dock { position: fixed; right: 34px; bottom: 92px; width: 148px; min-height: 138px; z-index: 9; pointer-events: none; display: none; text-align: center; filter: drop-shadow(0 14px 26px rgba(0,0,0,.45)); }
+    .pet-dock.visible { display: block; animation: petMaterialize .8s ease-out both; }
+    .pet-body { font-size: 72px; line-height: 1; transform-origin: 50% 85%; animation: chickenIdle 3.2s ease-in-out infinite; }
+    .pet-body.happy { animation: chickenHappy .7s ease-in-out 1; }
+    .pet-body.judge { animation: chickenJudge .8s ease-in-out 1; }
+    .pet-body.materialize { animation: chickenMaterialize .95s ease-out 1; }
+    .pet-name { display: inline-block; margin-top: 4px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.14); color: #f4f4f4; font-size: .72rem; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+    .pet-speech { min-height: 30px; max-width: 160px; margin: 0 auto 6px; padding: 8px 10px; border-radius: 14px; background: rgba(15,17,24,.86); border: 1px solid rgba(255,255,255,.13); color: #eef3ff; font-size: .72rem; line-height: 1.25; opacity: 0; transform: translateY(8px); transition: opacity .18s ease, transform .18s ease; }
+    .pet-speech.show { opacity: 1; transform: translateY(0); }
+    @keyframes petMaterialize { 0% { opacity: 0; transform: translateY(28px) scale(.72) rotate(-4deg); filter: blur(5px); } 65% { opacity: 1; transform: translateY(-6px) scale(1.08) rotate(3deg); filter: blur(0); } 100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); filter: blur(0); } }
+    @keyframes chickenIdle { 0%, 100% { transform: translateY(0) rotate(0); } 45% { transform: translateY(-4px) rotate(-2deg); } 60% { transform: translateY(-2px) rotate(2deg); } }
+    @keyframes chickenHappy { 0%, 100% { transform: translateY(0) rotate(0) scale(1); } 25% { transform: translateY(-14px) rotate(-8deg) scale(1.08); } 50% { transform: translateY(0) rotate(8deg) scale(1.03); } 75% { transform: translateY(-9px) rotate(-5deg) scale(1.06); } }
+    @keyframes chickenJudge { 0%, 100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-8px) rotate(-5deg); } 40% { transform: translateX(8px) rotate(5deg); } 60% { transform: translateX(-5px) rotate(-3deg); } 80% { transform: translateX(4px) rotate(2deg); } }
+    @keyframes chickenMaterialize { 0% { opacity: 0; transform: scale(.45) rotate(-18deg); } 60% { opacity: 1; transform: scale(1.2) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
 </style>
 </head>
 <body>
@@ -1221,7 +1236,14 @@
     </div>
   </div>
 
-  <div id="confettiLayer" class="confetti-layer"></div>
+  
+  <div id="petDock" class="pet-dock" aria-hidden="true">
+    <div id="petSpeech" class="pet-speech"></div>
+    <div id="petBody" class="pet-body" title="Chicken">🐔</div>
+    <div id="petName" class="pet-name">Chicken</div>
+  </div>
+
+<div id="confettiLayer" class="confetti-layer"></div>
 
   <div id="activeItemHud" class="active-item-hud" aria-live="polite">
     <div id="activeItemIcon" class="active-item-icon">🍭</div>
@@ -1394,6 +1416,10 @@
     const activeItemIcon = document.getElementById('activeItemIcon');
     const activeItemTitle = document.getElementById('activeItemTitle');
     const activeItemText = document.getElementById('activeItemText');
+    const petDock = document.getElementById('petDock');
+    const petBody = document.getElementById('petBody');
+    const petSpeech = document.getElementById('petSpeech');
+    const petName = document.getElementById('petName');
 
     const SAVE_KEY = 'cubex-save-v1';
 
@@ -1466,6 +1492,7 @@
     let lifetimeStats = null;
     let skinState = { vendorUnlocked: {}, owned: { classic: true }, equipped: 'classic' };
     let effectState = { vendorUnlocked: {}, owned: {}, equipped: { validWord: '', invalidWord: '', cashOut: '', ambient: '' } };
+    let petState = { owned: {}, equipped: '' };
     let inventory = { ...DEFAULT_INVENTORY };
     let activeInventoryItem = null;
     let activeSwapFirstSticker = null;
@@ -1608,6 +1635,11 @@
         unlockText: `New Effect Available:\nThat One Movie!\n\nYou know the one. The hero wakes up and realizes humanity is trapped inside a giant machine, everyone is being harvested, reality is a lie, and freedom means escaping the system that keeps people docile, useful, and slightly damp.\n\nWait.\n\nSorry.\n\nThat is not the movie.\n\nThat is just employment with worse lighting.\n\nAnyway, glowing 1s and 0s now rain behind the cube at 40% opacity, so you can enjoy a tasteful reminder that the simulation has payroll deductions.`,
         unlocked: () => rank >= 12 && lifetimeStats.lifetimeSlopCoinBanked >= 1000
       }
+    };
+
+
+    const PET_DEFINITIONS = {
+      chicken: { name: 'Chicken', icon: '🐔', description: 'This little lady may come in handy someday. Only one way to find out.' }
     };
 
 const LETTER_VALUES = {
@@ -2193,6 +2225,21 @@ const LETTER_VALUES = {
         rewards: [{ type: 'item', itemKey: 'swappyPop', count: 1 }],
         unlocked: () => lifetimeStats.threeFaceWordsMade >= 10,
         progress: () => [lifetimeStats.threeFaceWordsMade, 10]
+      },
+      {
+        id: 'twins',
+        name: 'Twins',
+        tier: 'Petty Miracle',
+        icon: '🐔',
+        iconHue: 44,
+        requirementText: 'Spell the same word twice in one round without buying letters, buying hints, or using items.',
+        description: `No, this isn't a 2002 beer commercial. You chose to give the cube déjà vu and spelled the same word twice in one round without buying any help or using any grifts, I mean gifts. Well done, you've created twins.`,
+        rewardLabel: 'Chicken pet unlocked',
+        unlocked: () => lifetimeStats.twinWordsCreated >= 1,
+        progress: () => [lifetimeStats.twinWordsCreated, 1],
+        reward: [
+          { type: 'pet', petKey: 'chicken' }
+        ]
       }
     ];
 
@@ -2278,6 +2325,14 @@ const LETTER_VALUES = {
             lifetimeStats.skinsUnlocked = pushUnique(lifetimeStats.skinsUnlocked, reward.name);
           }
           parts.push(`Cube skin unlocked: ${reward.name}`);
+          return;
+        }
+
+        if (reward.type === 'pet') {
+          const pet = PET_DEFINITIONS[reward.petKey];
+          if (pet && awardPet(reward.petKey)) {
+            parts.push(`${pet.name} pet unlocked. This little lady may come in handy someday. Only one way to find out.`);
+          }
           return;
         }
 
@@ -2429,7 +2484,9 @@ const LETTER_VALUES = {
         highestSingleWordScore: 0,
         longestWord: 0,
         sevenLetterWordsMade: 0,
-        medicalWordsSpelled: 0
+        medicalWordsSpelled: 0,
+        twinWordsCreated: 0,
+        petsOwned: []
       };
     }
 
@@ -2453,7 +2510,9 @@ const LETTER_VALUES = {
         skinsUnlocked: Array.isArray(incoming.skinsUnlocked) ? [...incoming.skinsUnlocked] : [],
         effectsUnlocked: Array.isArray(incoming.effectsUnlocked) ? [...incoming.effectsUnlocked] : [],
         sevenLetterWordsMade: Number(incoming.sevenLetterWordsMade || base.sevenLetterWordsMade || 0),
-        medicalWordsSpelled: Number(incoming.medicalWordsSpelled || base.medicalWordsSpelled || 0)
+        medicalWordsSpelled: Number(incoming.medicalWordsSpelled || base.medicalWordsSpelled || 0),
+        twinWordsCreated: Number(incoming.twinWordsCreated || base.twinWordsCreated || 0),
+        petsOwned: Array.isArray(incoming.petsOwned) ? [...incoming.petsOwned] : []
       };
     }
 
@@ -2581,6 +2640,7 @@ const LETTER_VALUES = {
           ${statCard('Titles Unlocked', lifetimeStats.titlesUnlocked.length, lifetimeStats.titlesUnlocked.length ? lifetimeStats.titlesUnlocked.join(', ') : 'No titles yet. Your aura remains unbranded.')}
           ${statCard('Cube Skins Unlocked', Object.values(skinState.owned || {}).filter(Boolean).length, `Equipped: ${skinDefinition(skinState.equipped).name}`)}
           ${statCard('Effects Owned', Object.values(normalizeEffectState(effectState).owned || {}).filter(Boolean).length, `Ambient: ${effectDefinition(normalizeEffectState(effectState).equipped.ambient)?.name || 'None'} · Cash Out: ${effectDefinition(normalizeEffectState(effectState).equipped.cashOut)?.name || 'None'}`)}
+          ${statCard('Pets Owned', Object.values(normalizePetState(petState).owned || {}).filter(Boolean).length, normalizePetState(petState).equipped ? `Equipped: ${PET_DEFINITIONS[normalizePetState(petState).equipped]?.name || 'Unknown pet'}` : 'No pet yet. The lower-right corner remains suspiciously poultry-free.')}
         </div>
 
         <h3>Word Length Counts</h3>
@@ -2675,7 +2735,10 @@ const LETTER_VALUES = {
         itemsBought: {},
         hintsBought: {},
         itemsUsedThisRound: {},
-        lettersUsed: {}
+        lettersUsed: {},
+        submittedWords: {},
+        usedHelpThisRound: false,
+        duplicateCleanWordThisRound: false
       };
     }
 
@@ -3132,6 +3195,11 @@ const LETTER_VALUES = {
 
     function updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore) {
       const analysis = analyzeSubmittedPath(submittedPath);
+      const previousWordCount = roundStats.submittedWords[word] || 0;
+      if (previousWordCount > 0 && !roundStats.usedHelpThisRound) {
+        roundStats.duplicateCleanWordThisRound = true;
+      }
+      roundStats.submittedWords[word] = previousWordCount + 1;
       const facesAfter = clearedFaceCount();
       const newlyClearedFaces = Math.max(0, facesAfter - facesBefore);
 
@@ -3494,7 +3562,88 @@ const LETTER_VALUES = {
     }
 
 
-    function addInventoryItem(itemKey, count = 1) {
+    
+    function normalizePetState(value) {
+      const incoming = value && typeof value === 'object' ? value : {};
+      return { owned: { ...(incoming.owned || {}) }, equipped: typeof incoming.equipped === 'string' ? incoming.equipped : '' };
+    }
+
+    function isPetOwned(petKey) {
+      petState = normalizePetState(petState);
+      return Boolean(petState.owned[petKey]);
+    }
+
+    function awardPet(petKey) {
+      petState = normalizePetState(petState);
+      if (petState.owned[petKey]) return false;
+      const pet = PET_DEFINITIONS[petKey];
+      petState.owned[petKey] = true;
+      petState.equipped = petKey;
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      lifetimeStats.petsOwned = pushUnique(lifetimeStats.petsOwned, pet.name);
+      updatePetDisplay(true);
+      saveGame();
+      return true;
+    }
+
+    function updatePetDisplay(materialize = false) {
+      petState = normalizePetState(petState);
+      const pet = PET_DEFINITIONS[petState.equipped];
+      if (!pet) {
+        petDock.classList.remove('visible');
+        petDock.setAttribute('aria-hidden', 'true');
+        return;
+      }
+      petBody.textContent = pet.icon;
+      petName.textContent = pet.name;
+      petDock.classList.add('visible');
+      petDock.setAttribute('aria-hidden', 'false');
+      if (materialize) {
+        petBody.classList.remove('materialize');
+        void petBody.offsetWidth;
+        petBody.classList.add('materialize');
+      }
+    }
+
+    let petSpeechTimer = null;
+
+    function petSay(text, mood = 'happy') {
+      if (!petDock.classList.contains('visible')) return;
+      petSpeech.textContent = text;
+      petSpeech.classList.add('show');
+      petBody.classList.remove('happy', 'judge');
+      void petBody.offsetWidth;
+      petBody.classList.add(mood);
+      clearTimeout(petSpeechTimer);
+      petSpeechTimer = setTimeout(() => {
+        petSpeech.classList.remove('show');
+        petBody.classList.remove('happy', 'judge');
+      }, 1900);
+    }
+
+    function maybePetValidReaction(word) {
+      if (!isPetOwned('chicken') || Math.random() > 0.10) return;
+      const lines = [
+        `${word.toUpperCase()}? She pecks approval into the floor.`,
+        'The chicken nods like she understood any of that.',
+        'Tiny cluck of support. Do not let it go to your head.',
+        'She flaps once. Management calls this morale.'
+      ];
+      petSay(lines[Math.floor(Math.random() * lines.length)], 'happy');
+    }
+
+    function maybePetInvalidReaction(word) {
+      if (!isPetOwned('chicken') || Math.random() > 0.25) return;
+      const lines = [
+        `${word.toUpperCase()} made her stop blinking.`,
+        'The chicken has concerns and no HR department.',
+        'She judged that so hard she briefly became poultry management.',
+        'A small cluck of disappointment has entered the record.'
+      ];
+      petSay(lines[Math.floor(Math.random() * lines.length)], 'judge');
+    }
+
+function addInventoryItem(itemKey, count = 1) {
       inventory = normalizeInventory(inventory);
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
 
@@ -4225,6 +4374,7 @@ const LETTER_VALUES = {
         lifetimeStats: normalizeLifetimeStats(lifetimeStats),
         skinState: normalizeSkinState(skinState),
         effectState: normalizeEffectState(effectState),
+        petState: normalizePetState(petState),
         inventory: normalizeInventory(inventory)
       };
 
@@ -4246,6 +4396,7 @@ const LETTER_VALUES = {
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         skinState = normalizeSkinState(save.skinState);
         effectState = normalizeEffectState(save.effectState);
+        petState = normalizePetState(save.petState);
         inventory = normalizeInventory(save.inventory);
 
         Object.entries(INVENTORY_ITEMS).forEach(([itemKey, item]) => {
@@ -4273,6 +4424,7 @@ const LETTER_VALUES = {
         dailyState = normalizeDailyState(null);
         skinState = normalizeSkinState(null);
         effectState = normalizeEffectState(null);
+        petState = normalizePetState(null);
       }
     }
 
@@ -4749,6 +4901,7 @@ function randomVowel() {
       lifetimeStats.lifetimeSlopCoinSpent += hint.price;
       lifetimeStats.hintsBought += 1;
       lifetimeStats.lifetimeHintSpend += hint.price;
+      roundStats.usedHelpThisRound = true;
       lifetimeStats.hintPurchaseCounts[hintKey] = (lifetimeStats.hintPurchaseCounts[hintKey] || 0) + 1;
       roundStats.slopCoinSpent += hint.price;
       addToRoundMap('hintsBought', hintKey, 1);
@@ -5539,6 +5692,7 @@ function randomVowel() {
           : randomMissionFailureComment();
 
         triggerEffect('invalidWord', { stickers: [...selectedStickers] });
+        maybePetInvalidReaction(word);
         clearSelection(`"${word.toUpperCase()}" is not in the allowed word list. ${failureText}`);
         showPendingCelebration();
         return;
@@ -5563,6 +5717,10 @@ function randomVowel() {
       });
 
       updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore);
+      if (roundStats.duplicateCleanWordThisRound) {
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.twinWordsCreated = Math.max(lifetimeStats.twinWordsCreated, 1);
+      }
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.validWordsSubmitted += 1;
@@ -5600,6 +5758,7 @@ function randomVowel() {
       );
 
       triggerEffect('validWord', { stickers: submittedPath });
+      maybePetValidReaction(word);
       checkAchievements();
 
       if (xpResult.ranksGained > 0) {
@@ -5976,6 +6135,7 @@ vendorSkinList.addEventListener('click', event => {
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.lifetimeSlopCoinSpent += totalCost;
       roundStats.slopCoinSpent += totalCost;
+      roundStats.usedHelpThisRound = true;
 
       Object.entries(pendingItemPurchases).forEach(([itemKey, qty]) => {
         if (!qty || qty <= 0) return;
@@ -6280,6 +6440,8 @@ addEventListener('resize', () => {
       loadGame();
       applyEquippedSkin();
       effectState = normalizeEffectState(effectState);
+      petState = normalizePetState(petState);
+      updatePetDisplay();
       resizeEffectOverlay();
       dailyState = normalizeDailyState(dailyState);
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
