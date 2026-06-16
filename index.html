@@ -2267,7 +2267,9 @@ const LETTER_VALUES = {
         icon: '🐔',
         iconHue: 44,
         requirementText: 'Spell the same word twice in one round without buying letters, buying hints, or using items.',
-        description: `No, this isn't a 2002 beer commercial. You chose to give the cube déjà vu and spelled the same word twice in one round without buying any help or using any grifts, I mean gifts. Well done, you've created twins.
+        description: `No, this isn't a 2002 beer commercial. You chose to give the cube déjà vu and spelled the same word twice in one round without buying any help or using any grifts, I mean gifts.
+
+Well done, you've created twins.
 
 And since apparently two is better than one, the vendor has decided to give you... a Chicken!
 
@@ -2275,7 +2277,7 @@ This little lady may come in handy someday. Only one way to find out.`,
         rewardLabel: 'Pet: Chicken',
         unlocked: () => lifetimeStats.twinWordsCreated >= 1,
         progress: () => [lifetimeStats.twinWordsCreated, 1],
-        reward: [
+        rewards: [
           { type: 'pet', petKey: 'chicken' }
         ]
       }
@@ -2368,8 +2370,9 @@ This little lady may come in handy someday. Only one way to find out.`,
 
         if (reward.type === 'pet') {
           const pet = PET_DEFINITIONS[reward.petKey];
-          if (pet && awardPet(reward.petKey)) {
-            parts.push(`${pet.name} pet unlocked. This little lady may come in handy someday. Only one way to find out.`);
+          if (pet) {
+            awardPet(reward.petKey);
+            parts.push(`Pet unlocked: ${pet.name}`);
           }
           return;
         }
@@ -2424,6 +2427,33 @@ This little lady may come in handy someday. Only one way to find out.`,
       return true;
     }
 
+    function unlockTwinsImmediately() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      const twinsAchievement = achievementById('twins');
+      if (!twinsAchievement || achievementUnlocked('twins')) return false;
+
+      lifetimeStats.twinWordsCreated = Math.max(lifetimeStats.twinWordsCreated, 1);
+      const rewardText = grantAchievementRewards(twinsAchievement);
+
+      lifetimeStats.achievementUnlocks.twins = {
+        unlockedAt: Date.now()
+      };
+      lifetimeStats.achievementUnlockOrder.push('twins');
+
+      updatePetDisplay(true);
+      updateScoreDisplay();
+      updateInventoryDisplay();
+      updateJournalDisplay();
+      saveGame();
+
+      showAchievementCelebration({
+        achievementId: 'twins',
+        rewardText: rewardText || 'Pet unlocked: Chicken'
+      });
+
+      return true;
+    }
+
     function checkAchievements(options = {}) {
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
 
@@ -2450,7 +2480,11 @@ This little lady may come in handy someday. Only one way to find out.`,
       achievementIcon.style.setProperty('--achievement-hue', achievement.iconHue);
       achievementTier.textContent = achievement.tier;
       achievementName.textContent = achievement.name.toUpperCase();
-      achievementDescription.textContent = achievement.description;
+      achievementDescription.innerHTML = String(achievement.description || '')
+        .split('\n')
+        .filter(Boolean)
+        .map(line => line.trim())
+        .join('<br><br>');
       achievementReward.innerHTML = `<strong>Reward:</strong> ${payload.rewardText}`;
       achievementModal.classList.add('open');
       achievementModal.setAttribute('aria-hidden', 'false');
@@ -5864,12 +5898,17 @@ function randomVowel() {
 
       triggerEffect('validWord', { stickers: submittedPath });
       maybePetValidReaction(word);
-      checkAchievements();
 
-      if (xpResult.ranksGained > 0) {
-        showRankUpCelebration(xpResult.newRank, xpResult.ranksGained);
-      } else {
-        showPendingCelebration();
+      const showedTwins = roundStats.duplicateCleanWordThisRound && unlockTwinsImmediately();
+
+      if (!showedTwins) {
+        checkAchievements();
+
+        if (xpResult.ranksGained > 0) {
+          showRankUpCelebration(xpResult.newRank, xpResult.ranksGained);
+        } else {
+          showPendingCelebration();
+        }
       }
     });
 
