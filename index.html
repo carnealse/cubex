@@ -6028,7 +6028,37 @@ function randomVowel() {
 
       const cashedOut = totalScore;
       const bonusComplete = isMissionComplete(currentBonusMission);
+      const bonusFailed = isMissionFailed(currentBonusMission);
       const grade = gradeRound(mainComplete, bonusComplete);
+
+      const oldMainMission = currentMainMission;
+      const oldBonusMission = currentBonusMission;
+      const oldRoundStats = {
+        scoreEarned: roundStats.scoreEarned,
+        slopCoinSpent: roundStats.slopCoinSpent,
+        validWords: roundStats.validWords,
+        invalidWords: roundStats.invalidWords,
+        tilesCleared: roundStats.tilesCleared,
+        lettersBought: roundStats.lettersBought,
+        vowelsBought: roundStats.vowelsBought,
+        consonantsBought: roundStats.consonantsBought,
+        itemsBought: { ...(roundStats.itemsBought || {}) },
+        itemsUsedThisRound: { ...(roundStats.itemsUsedThisRound || {}) },
+        hintsBought: { ...(roundStats.hintsBought || {}) }
+      };
+
+      let missionXP = 0;
+      let rewardText = '';
+
+      if (mainComplete) {
+        missionXP += oldMainMission.rewardXP;
+        rewardText += ` Main complete: +${oldMainMission.rewardXP} XP.`;
+      }
+
+      if (bonusComplete) {
+        missionXP += oldBonusMission.rewardXP;
+        rewardText += ` Bonus complete: +${oldBonusMission.rewardXP} XP.`;
+      }
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.totalCashouts += 1;
@@ -6036,20 +6066,7 @@ function randomVowel() {
       lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
       if (mainComplete) lifetimeStats.contractsCompleted += 1;
       if (bonusComplete) lifetimeStats.bonusContractsCompleted += 1;
-      if (isMissionFailed(currentBonusMission)) lifetimeStats.bonusContractsFailed += 1;
-
-      let missionXP = 0;
-      let rewardText = '';
-
-      if (mainComplete) {
-        missionXP += currentMainMission.rewardXP;
-        rewardText += ` Main complete: +${currentMainMission.rewardXP} XP.`;
-      }
-
-      if (bonusComplete) {
-        missionXP += currentBonusMission.rewardXP;
-        rewardText += ` Bonus complete: +${currentBonusMission.rewardXP} XP.`;
-      }
+      if (bonusFailed) lifetimeStats.bonusContractsFailed += 1;
 
       if (grade === 'S+') {
         const rewardItemKey = addRandomUnlockedItem(1);
@@ -6062,23 +6079,23 @@ function randomVowel() {
 
       const recapSummary = {
         grade,
-        earned: roundStats.scoreEarned,
-        spent: roundStats.slopCoinSpent,
-        netProfit: roundStats.scoreEarned - roundStats.slopCoinSpent,
+        earned: oldRoundStats.scoreEarned,
+        spent: oldRoundStats.slopCoinSpent,
+        netProfit: oldRoundStats.scoreEarned - oldRoundStats.slopCoinSpent,
         banked: cashedOut,
         missionXP,
         mainComplete,
         bonusComplete,
-        bonusFailed: isMissionFailed(currentBonusMission),
-        validWords: roundStats.validWords,
-        invalidWords: roundStats.invalidWords,
-        tilesCleared: roundStats.tilesCleared,
-        lettersBought: roundStats.lettersBought,
-        vowelsBought: roundStats.vowelsBought,
-        consonantsBought: roundStats.consonantsBought,
-        itemsBought: { ...(roundStats.itemsBought || {}) },
-        itemsUsedThisRound: { ...(roundStats.itemsUsedThisRound || {}) },
-        hintsBought: { ...(roundStats.hintsBought || {}) }
+        bonusFailed,
+        validWords: oldRoundStats.validWords,
+        invalidWords: oldRoundStats.invalidWords,
+        tilesCleared: oldRoundStats.tilesCleared,
+        lettersBought: oldRoundStats.lettersBought,
+        vowelsBought: oldRoundStats.vowelsBought,
+        consonantsBought: oldRoundStats.consonantsBought,
+        itemsBought: oldRoundStats.itemsBought,
+        itemsUsedThisRound: oldRoundStats.itemsUsedThisRound,
+        hintsBought: oldRoundStats.hintsBought
       };
 
       bankedScore += cashedOut;
@@ -6086,9 +6103,6 @@ function randomVowel() {
 
       const shouldCelebrateFirstCashout = !hasSeenFirstCashout && bankedScore > 0;
       if (shouldCelebrateFirstCashout) hasSeenFirstCashout = true;
-
-      triggerEffect('cashOut', { grade });
-      checkAchievements();
 
       startFreshRound();
 
@@ -6098,11 +6112,22 @@ function randomVowel() {
       updateVendorDisplay();
       updateInventoryDisplay();
       updateDailyDisplay();
-      saveGame();
 
       setStatus(
         `Cashed out ${cashedOut.toLocaleString()} SlopCoin. Grade ${grade}.${rewardText || ' Main contract complete, bonus ignored you back. Fresh cube loaded.'}`
       );
+
+      try {
+        triggerEffect('cashOut', { grade });
+      } catch (error) {
+        console.warn('Cashout effect failed without blocking cashout:', error);
+      }
+
+      try {
+        checkAchievements();
+      } catch (error) {
+        console.warn('Achievement check failed without blocking cashout:', error);
+      }
 
       if (cashoutXPResult.ranksGained > 0) {
         pendingRankUpCelebration = {
@@ -6115,6 +6140,7 @@ function randomVowel() {
         pendingItemUnlockCelebrations.unshift('__FIRST_CASHOUT__');
       }
 
+      saveGame();
       showRoundRecap(recapSummary);
     });
 
