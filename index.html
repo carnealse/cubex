@@ -933,7 +933,48 @@
     .pet-body.judge { animation: chickenJudge .8s ease-in-out 1 !important; }
     .pet-body.materialize { animation: chickenMaterialize .95s ease-out 1 !important; }
 
-</style>
+
+    .daily-panel {
+      width: 386px !important;
+      max-width: calc(100vw - 40px) !important;
+      padding: 16px !important;
+    }
+
+    .daily-panel-header {
+      align-items: center !important;
+      margin-bottom: 12px !important;
+    }
+
+    .daily-panel-title {
+      line-height: 1.25 !important;
+      padding-right: 14px !important;
+      flex: 1 1 auto !important;
+    }
+
+    .daily-hide-button {
+      flex: 0 0 auto !important;
+      min-width: 58px !important;
+      height: 34px !important;
+      padding: 5px 12px !important;
+      margin-left: 12px !important;
+      border-radius: 14px !important;
+    }
+
+    #dailyPanel .daily-word-list {
+      gap: 8px !important;
+    }
+
+    #dailyPanel .daily-word {
+      padding: 9px 12px !important;
+    }
+
+    #dailyPanel .daily-meta {
+      margin-top: 10px !important;
+      line-height: 1.35 !important;
+    }
+
+
+  </style>
 </head>
 <body>
   <canvas id="effectOverlay" aria-hidden="true"></canvas>
