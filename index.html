@@ -1533,6 +1533,7 @@
     let currentMainMission = null;
     let currentBonusMission = null;
     let failedMissionIds = new Set();
+    let completedMissionIds = new Set();
     let pendingRankUpCelebration = null;
     let pendingSwappyPopCelebration = false;
     let pendingItemUnlockCelebrations = [];
@@ -2898,7 +2899,7 @@ function showRoundRecap(summary) {
       return 5;
     }
 
-    function missionProgressValue(mission) {
+    function rawMissionProgressValue(mission) {
       if (!mission || !roundStats) return 0;
 
       if (mission.stat === 'cleanWords') {
@@ -2908,9 +2909,28 @@ function showRoundRecap(summary) {
       return roundStats[mission.stat] || 0;
     }
 
+    function missionProgressValue(mission) {
+      if (!mission || !roundStats) return 0;
+
+      if (completedMissionIds.has(mission.id)) {
+        return Math.max(rawMissionProgressValue(mission), mission.target);
+      }
+
+      return rawMissionProgressValue(mission);
+    }
+
     function isMissionComplete(mission) {
-      if (isMissionFailed(mission)) return false;
-      return missionProgressValue(mission) >= mission.target;
+      if (!mission || isMissionFailed(mission)) return false;
+      return completedMissionIds.has(mission.id) || rawMissionProgressValue(mission) >= mission.target;
+    }
+
+    function lockCompletedMissions() {
+      [currentMainMission, currentBonusMission].forEach(mission => {
+        if (!mission || isMissionFailed(mission)) return;
+        if (rawMissionProgressValue(mission) >= mission.target) {
+          completedMissionIds.add(mission.id);
+        }
+      });
     }
 
     function isMissionFailed(mission) {
@@ -2935,6 +2955,8 @@ function showRoundRecap(summary) {
     }
 
     function failCleanWordMissions() {
+      lockCompletedMissions();
+
       [currentMainMission, currentBonusMission].forEach(mission => {
         if (mission && mission.stat === 'cleanWords' && !isMissionComplete(mission)) {
           failedMissionIds.add(mission.id);
@@ -3091,7 +3113,7 @@ function showRoundRecap(summary) {
           target: Math.min(8, 2 + Math.floor(rank / 5)),
           unit: ' clean words',
           rewardXP: 65 + rank * 8,
-          flavor: 'Make words without insulting the dictionary with keyboard vomit.'
+          flavor: 'Make clean words until the contract is complete. Once earned, the cube cannot claw it back like a cursed bonus check.'
         },
         {
           id: 'bonus_five_words',
@@ -3174,6 +3196,7 @@ function showRoundRecap(summary) {
     function startNewMissions() {
       roundStats = emptyRoundStats();
       failedMissionIds = new Set();
+      completedMissionIds = new Set();
       currentMainMission = pickRandomMission('main');
       currentBonusMission = pickRandomMission('bonus', currentMainMission.id);
       updateMissionDisplay();
@@ -5800,6 +5823,8 @@ function randomVowel() {
       });
 
       updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore);
+      lockCompletedMissions();
+      updateMissionDisplay();
 
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
@@ -5988,6 +6013,9 @@ function randomVowel() {
 
     document.getElementById('cashOut').addEventListener('click', () => {
       if (busy || totalScore === 0) return;
+
+      lockCompletedMissions();
+      updateMissionDisplay();
 
       const mainComplete = isMissionComplete(currentMainMission);
 
