@@ -923,6 +923,16 @@
       font-size: 0 !important;
     }
 
+
+    .daily-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .daily-hide-button { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); color: #c9d2e3; border-radius: 10px; padding: 4px 9px; font-size: .72rem; font-weight: 900; cursor: pointer; }
+    .daily-hide-button:hover { background: rgba(255,255,255,.14); color: #ffffff; }
+    .pet-name { display: none !important; }
+    .pet-body { animation: none !important; }
+    .pet-body.happy { animation: chickenHappy .7s ease-in-out 1 !important; }
+    .pet-body.judge { animation: chickenJudge .8s ease-in-out 1 !important; }
+    .pet-body.materialize { animation: chickenMaterialize .95s ease-out 1 !important; }
+
 </style>
 </head>
 <body>
@@ -967,7 +977,7 @@
   </div>
 
   <div id="dailyPanel" class="daily-panel" aria-live="polite">
-    <div id="dailyPanelTitle" class="daily-panel-title">Daily Challenge</div>
+    <div class="daily-panel-header"><div id="dailyPanelTitle" class="daily-panel-title">Daily Challenge</div><button id="dailyPanelHide" class="daily-hide-button" type="button">Hide</button></div>
     <div id="dailyPanelWords" class="daily-word-list"></div>
     <div id="dailyPanelMeta" class="daily-meta"></div>
   </div>
@@ -1397,6 +1407,7 @@
     const dailyPanelTitle = document.getElementById('dailyPanelTitle');
     const dailyPanelWords = document.getElementById('dailyPanelWords');
     const dailyPanelMeta = document.getElementById('dailyPanelMeta');
+    const dailyPanelHide = document.getElementById('dailyPanelHide');
     const dailyCompleteModal = document.getElementById('dailyCompleteModal');
     const dailyCompleteName = document.getElementById('dailyCompleteName');
     const dailyCompleteDescription = document.getElementById('dailyCompleteDescription');
@@ -1568,6 +1579,7 @@
     let dailyMode = false;
     let activeDailyDay = null;
     let dailyForcedLetterPool = null;
+    let dailyPanelHidden = false;
 
 
     const CUBE_SKINS = {
@@ -1795,6 +1807,7 @@ const LETTER_VALUES = {
     }
 
     function openMenu(menuName) {
+      if (menuName === 'daily') dailyPanelHidden = false;
       closeMenus();
 
       if (menuName === 'vendor') {
@@ -3788,8 +3801,45 @@ function showRoundRecap(summary) {
       clearTimeout(petSpeechTimer);
     }
 
-    function maybePetValidReaction(word) {
-      if (!isPetOwned('chicken') || Math.random() > 0.10) return;
+    
+    const CHICKEN_TRIGGER_REPLIES = {
+      trump: ["Buy your commemorative SlopCoin for 10,000. It is not a grift, I promise.", "**Curses in Chicken**", "Who left those adult diapers on the lawn?"],
+      cut: ["Easy there, Freddy. No need to go all Friday the Halloweenth here.", "The line? A corner? A snitch? What are we talking about here?", "Ok, calm down before you hurt someone."],
+      food: ["*Pecks at the ground*", "Are you threatening me? I thought we were friends.", "Ok, I chose the mealworms last time. Your turn to pick."],
+      egg: ["Absolutely not. Buy me dinner first.", "Fine. One egg. Do not make this weird.", "The egg department is reviewing your request and has already misplaced the form."],
+      chicken: ["Finally. Recognition.", "That is my name. Do not wear it out like a middle manager with a buzzword.", "She does a tiny dance and immediately regrets the attention."],
+      wolf: ["Nope.", "She has left the building for completely unrelated survival reasons.", "A wolf? In this economy? Absolutely not."],
+      fox: ["That word has been flagged by poultry security.", "She slowly backs away like HR just joined the meeting.", "Fox detected. Feathers entering witness protection."],
+      blue: ["Blue hair unlocked? It is called a comb, but sure, Picasso.", "She accepts the concept of blue, but not your terminology.", "The chicken is now considering a midlife cosmetic incident."],
+      shoes: ["Shoes? Finally. These floors are a workplace violation.", "Tiny footwear has entered procurement.", "She has feet like angry pipe cleaners. Shoes may help morale."],
+      corn: ["You have her attention.", "Corn detected. Friendship temporarily restored.", "She would like to discuss bulk purchasing."],
+      money: ["The vendor heard that and started breathing through his mouth.", "Money is fake. Mealworms are real.", "She pecks once in honor of capitalism's dumb little costume."],
+      rich: ["Rich? Wonderful. The vendor has invented a fee for standing near him.", "She has no concept of wealth, only crumbs and suspicious power.", "The cube just raised rent."],
+      tax: ["The chicken has claimed zero dependents and three emotional damages.", "Tax season is just an annual boss fight with worse music.", "She pecked the receipt. It did not improve the refund."],
+      boss: ["She has promoted herself to Poultry Operations Lead.", "The boss says this could have been an email.", "She clucks like someone who says circle back without shame."],
+      work: ["She clocks in, pecks twice, and files a grievance.", "Work detected. Joy has been temporarily disabled.", "The chicken requests compensation in corn and silence."],
+      union: ["She has begun organizing the coop.", "Management calls it a family until the chickens ask for benefits.", "A tiny picket sign has appeared. It says CLUCK NO."],
+      doctor: ["She remembers the doctor who stole that inch from your official height.", "Medical word detected. The chicken would like a second opinion and better socks.", "She says the chart is wrong. She is not qualified, but she is passionate."],
+      nurse: ["The chicken respects nurses and fears their clipboard power.", "She stands up straighter. Nurses can smell nonsense.", "She says thank you, then immediately asks if snacks are allowed."],
+      coffee: ["She vibrates slightly. Bad idea. Continue.", "Coffee has entered the bloodstream. The chicken can now see tomorrow.", "She pecks faster, not better."],
+      beer: ["No, this is still not a 2002 commercial.", "She asks if this comes with wings, then remembers the situation.", "The chicken says drink responsibly, then knocks over a chair."],
+      crime: ["The cube has requested legal counsel.", "She saw nothing. She was never here.", "Crime? That is such an ugly word. Try aggressive opportunity."],
+      law: ["The chicken respects the law when the law respects snack breaks.", "She has retained counsel. It is a worm in a tiny tie.", "Legal says stop pecking the evidence."],
+      void: ["She stared into it. It blinked first.", "The void offered benefits. Suspicious.", "She does not fear nothingness. She fears foxes and unpaid overtime."],
+      ghost: ["She saw that too, right?", "Ghost detected. Coop security has been reduced to vibes.", "She clucks at the empty corner. The empty corner clucks back."],
+      gold: ["Gold? The vendor just put on cologne.", "She does not trust shiny things unless they are corn-adjacent.", "Gold unlocked: emotional damage with reflectivity."]
+    };
+
+function maybePetValidReaction(word) {
+      if (!isPetOwned('chicken')) return;
+
+      const triggerLines = CHICKEN_TRIGGER_REPLIES[word];
+      if (triggerLines && triggerLines.length) {
+        petSay(triggerLines[Math.floor(Math.random() * triggerLines.length)], 'happy');
+        return;
+      }
+
+      if (Math.random() > 0.10) return;
       const lines = [
         `${word.toUpperCase()}? She pecks approval into the floor.`,
         'The chicken nods like she understood any of that.',
@@ -3800,7 +3850,15 @@ function showRoundRecap(summary) {
     }
 
     function maybePetInvalidReaction(word) {
-      if (!isPetOwned('chicken') || Math.random() > 0.25) return;
+      if (!isPetOwned('chicken')) return;
+
+      const triggerLines = CHICKEN_TRIGGER_REPLIES[word];
+      if (triggerLines && triggerLines.length) {
+        petSay(triggerLines[Math.floor(Math.random() * triggerLines.length)], 'judge');
+        return;
+      }
+
+      if (Math.random() > 0.25) return;
       const lines = [
         `${word.toUpperCase()} made her stop blinking.`,
         'The chicken has concerns and no HR department.',
@@ -4438,7 +4496,7 @@ function addInventoryItem(itemKey, count = 1) {
       dailyStart.disabled = complete;
       dailyStart.textContent = complete ? 'Daily Complete' : active ? 'Restart Daily Challenge' : 'Start Daily Challenge';
 
-      if (active || Object.keys(progress).length) {
+      if ((active || Object.keys(progress).length) && !dailyPanelHidden) {
         dailyPanel.classList.add('open');
         dailyPanelTitle.textContent = `Daily Challenge · Day ${day}`;
         renderDailyWords(dailyPanelWords, challenge, progress);
@@ -4487,6 +4545,7 @@ function addInventoryItem(itemKey, count = 1) {
     }
 
     function startDailyChallenge() {
+      dailyPanelHidden = false;
       const challenge = currentDailyChallenge();
       if (!challenge || isDailyComplete(challenge.day)) return;
 
@@ -4538,6 +4597,7 @@ function addInventoryItem(itemKey, count = 1) {
         hasSeenFirstCashout,
         hasSeenFirstSwappyPop,
         dailyState: normalizeDailyState(dailyState),
+        dailyPanelHidden,
         lifetimeStats: normalizeLifetimeStats(lifetimeStats),
         skinState: normalizeSkinState(skinState),
         effectState: normalizeEffectState(effectState),
@@ -4560,6 +4620,7 @@ function addInventoryItem(itemKey, count = 1) {
         hasSeenFirstCashout = Boolean(save.hasSeenFirstCashout);
         hasSeenFirstSwappyPop = Boolean(save.hasSeenFirstSwappyPop);
         dailyState = normalizeDailyState(save.dailyState);
+        dailyPanelHidden = Boolean(save.dailyPanelHidden);
         lifetimeStats = normalizeLifetimeStats(save.lifetimeStats);
         skinState = normalizeSkinState(save.skinState);
         effectState = normalizeEffectState(save.effectState);
@@ -4589,6 +4650,7 @@ function addInventoryItem(itemKey, count = 1) {
         totalXP = 0;
         rank = 1;
         dailyState = normalizeDailyState(null);
+        dailyPanelHidden = false;
         skinState = normalizeSkinState(null);
         effectState = normalizeEffectState(null);
         petState = normalizePetState(null);
@@ -5807,7 +5869,13 @@ function randomVowel() {
       }
     });
 
-    document.querySelectorAll('[data-journal-tab]').forEach(button => {
+        dailyPanelHide.addEventListener('click', () => {
+      dailyPanelHidden = true;
+      updateDailyDisplay();
+      saveGame();
+    });
+
+document.querySelectorAll('[data-journal-tab]').forEach(button => {
       button.addEventListener('click', () => {
         const tabName = button.dataset.journalTab;
 
@@ -5856,9 +5924,13 @@ function randomVowel() {
         saveGame();
         checkAchievements();
 
-        const failureText = isMissionFailed(currentMainMission)
+        const mainFailedNow = isMissionFailed(currentMainMission);
+        const bonusFailedNow = isMissionFailed(currentBonusMission);
+        const failureText = mainFailedNow
           ? `${randomMissionFailureComment()} ${failedMainRoundText()}`
-          : randomMissionFailureComment();
+          : bonusFailedNow
+            ? randomMissionFailureComment()
+            : 'Invalid word. The dictionary rejected it, but no completed contract was harmed in the making of this nonsense.';
 
         triggerEffect('invalidWord', { stickers: [...selectedStickers] });
         maybePetInvalidReaction(word);
