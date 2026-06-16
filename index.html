@@ -902,6 +902,11 @@
     @keyframes chickenHappy { 0%, 100% { transform: translateY(0) rotate(0) scale(1); } 25% { transform: translateY(-14px) rotate(-8deg) scale(1.08); } 50% { transform: translateY(0) rotate(8deg) scale(1.03); } 75% { transform: translateY(-9px) rotate(-5deg) scale(1.06); } }
     @keyframes chickenJudge { 0%, 100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-8px) rotate(-5deg); } 40% { transform: translateX(8px) rotate(5deg); } 60% { transform: translateX(-5px) rotate(-3deg); } 80% { transform: translateX(4px) rotate(2deg); } }
     @keyframes chickenMaterialize { 0% { opacity: 0; transform: scale(.45) rotate(-18deg); } 60% { opacity: 1; transform: scale(1.2) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+
+    .abandon-modal .achievement-icon {
+      background: radial-gradient(circle at 35% 25%, rgba(255,255,255,.24), rgba(255,179,71,.16) 38%, rgba(0,0,0,.28) 100%);
+    }
+
 </style>
 </head>
 <body>
@@ -1118,7 +1123,29 @@
     </div>
   </div>
 
-  <div id="roundRecapModal" class="modal-backdrop" aria-hidden="true">
+  
+  <div id="abandonModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal celebration-modal abandon-modal" role="dialog" aria-modal="true" aria-labelledby="abandonTitle">
+      <div class="modal-header">
+        <div id="abandonTitle" class="modal-title">Round Abandoned</div>
+        <button class="modal-close" data-close-modal aria-label="Close abandon popup">×</button>
+      </div>
+
+      <div class="achievement-popup-header">
+        <div class="achievement-icon" style="--achievement-hue:35;">🚪</div>
+        <div id="abandonTier" class="achievement-tier">STRATEGIC EXIT EVENT</div>
+      </div>
+
+      <div id="abandonHeadline" class="celebration-title">You left the building.</div>
+      <div class="celebration-body">
+        <p id="abandonSnark"></p>
+      </div>
+      <div id="abandonLoss" class="achievement-reward"></div>
+      <button class="celebration-button" data-close-modal>Fine, Bring Me A New Cube</button>
+    </div>
+  </div>
+
+<div id="roundRecapModal" class="modal-backdrop" aria-hidden="true">
     <div class="game-modal celebration-modal" role="dialog" aria-modal="true" aria-labelledby="roundRecapTitle">
       <div class="modal-header">
         <div id="roundRecapTitle" class="modal-title">Round Recap</div>
@@ -1380,6 +1407,10 @@
     const achievementDescription = document.getElementById('achievementDescription');
     const achievementReward = document.getElementById('achievementReward');
     const roundRecapModal = document.getElementById('roundRecapModal');
+    const abandonModal = document.getElementById('abandonModal');
+    const abandonHeadline = document.getElementById('abandonHeadline');
+    const abandonSnark = document.getElementById('abandonSnark');
+    const abandonLoss = document.getElementById('abandonLoss');
     const hintUnlockModal = document.getElementById('hintUnlockModal');
     const hintUnlockName = document.getElementById('hintUnlockName');
     const hintUnlockDescription = document.getElementById('hintUnlockDescription');
@@ -1724,6 +1755,8 @@ const LETTER_VALUES = {
       achievementModal.setAttribute('aria-hidden', 'true');
       roundRecapModal.classList.remove('open');
       roundRecapModal.setAttribute('aria-hidden', 'true');
+      abandonModal.classList.remove('open');
+      abandonModal.setAttribute('aria-hidden', 'true');
       hintUnlockModal.classList.remove('open');
       hintUnlockModal.setAttribute('aria-hidden', 'true');
       hintModal.classList.remove('open');
@@ -2233,8 +2266,12 @@ const LETTER_VALUES = {
         icon: '🐔',
         iconHue: 44,
         requirementText: 'Spell the same word twice in one round without buying letters, buying hints, or using items.',
-        description: `No, this isn't a 2002 beer commercial. You chose to give the cube déjà vu and spelled the same word twice in one round without buying any help or using any grifts, I mean gifts. Well done, you've created twins.`,
-        rewardLabel: 'Chicken pet unlocked',
+        description: `No, this isn't a 2002 beer commercial. You chose to give the cube déjà vu and spelled the same word twice in one round without buying any help or using any grifts, I mean gifts. Well done, you've created twins.
+
+And since apparently two is better than one, the vendor has decided to give you... a Chicken!
+
+This little lady may come in handy someday. Only one way to find out.`,
+        rewardLabel: 'Pet: Chicken',
         unlocked: () => lifetimeStats.twinWordsCreated >= 1,
         progress: () => [lifetimeStats.twinWordsCreated, 1],
         reward: [
@@ -2777,7 +2814,51 @@ const LETTER_VALUES = {
       return 'Round complete. The SlopChain burped, recorded the transaction, and immediately denied liability.';
     }
 
-    function showRoundRecap(summary) {
+    
+    const ABANDON_SNARK_LINES = [
+      "I get it. You didn’t feel like putting in two weeks notice. You just left your mess where it was and walked out. Way to stick it to the man. Or woman. Or cube overlord. Or doctor who said you were an inch shorter than you swear you are.",
+      "The round has been abandoned with the confidence of a streaming service canceling the best show after one season and then wondering why everyone is mad.",
+      "You walked away so cleanly the cube assumed this was a corporate restructuring. No one knows what happened, but several people updated LinkedIn.",
+      "This round has been placed in a folder called Final_Final_Actually_Final and then quietly deleted during a leadership sync.",
+      "The cube requested closure. Management approved a pizza party instead.",
+      "Somewhere, a tiny project manager just moved this round to Parking Lot and pretended that means anything.",
+      "You didn’t quit. You pivoted. Very agile. Extremely disruptive. The cube has been disrupted directly into the trash.",
+      "This exit had the energy of a superhero sequel realizing the budget ran out before the third act.",
+      "The cube prepared a performance improvement plan, but you left before HR could find the printer.",
+      "This round has been sunsetted, which is corporate for taken behind the barn with a slide deck.",
+      "You pulled the ripcord so fast the cube thought it was in a spy movie, except the spy had dental premiums and unresolved Jira tickets.",
+      "The cube asked if this was quiet quitting. Legal advised everyone to call it a strategic resource realignment.",
+      "You abandoned the round like a villain leaving the self-destruct timer running because apparently stairs are for interns.",
+      "The board has reviewed this decision and concluded that nobody is at fault, which means absolutely someone is at fault.",
+      "This round has been removed from the roadmap, added back to the roadmap, renamed, deprioritized, and then abandoned again for consistency.",
+      "You left the cube sitting there like a printer jam nobody wants to admit they caused.",
+      "The cube has been ghosted harder than a meeting invite marked optional by someone with authority.",
+      "This was not failure. This was brand repositioning. The brand is now gone.",
+      "The round has entered witness protection under the name Q4 Initiative.",
+      "You walked out like the credits rolled early and the post-credit scene was just a spreadsheet crying softly."
+    ];
+
+    function randomAbandonSnark() {
+      return ABANDON_SNARK_LINES[Math.floor(Math.random() * ABANDON_SNARK_LINES.length)];
+    }
+
+    function showAbandonPopup(summary) {
+      const failed = summary && summary.grade === 'F';
+      closeMenus();
+
+      abandonHeadline.textContent = failed ? 'The failed round has been escorted off-site.' : 'You left the building.';
+      abandonSnark.textContent = randomAbandonSnark();
+
+      const lost = Number(summary?.lostSlopCoin || summary?.banked || 0);
+      abandonLoss.innerHTML = lost > 0
+        ? `<strong>Unrealized SlopCoin Lost:</strong> ${lost.toLocaleString()}`
+        : '<strong>Unrealized SlopCoin Lost:</strong> 0. The cube cannot garnish vibes.';
+
+      abandonModal.classList.add('open');
+      abandonModal.setAttribute('aria-hidden', 'false');
+    }
+
+function showRoundRecap(summary) {
       closeMenus();
 
       const netClass = summary.netProfit < 0 ? 'recap-loss' : '';
@@ -3198,6 +3279,8 @@ const LETTER_VALUES = {
       const previousWordCount = roundStats.submittedWords[word] || 0;
       if (previousWordCount > 0 && !roundStats.usedHelpThisRound) {
         roundStats.duplicateCleanWordThisRound = true;
+        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+        lifetimeStats.twinWordsCreated = Math.max(lifetimeStats.twinWordsCreated, 1);
       }
       roundStats.submittedWords[word] = previousWordCount + 1;
       const facesAfter = clearedFaceCount();
@@ -5717,10 +5800,7 @@ function randomVowel() {
       });
 
       updateRoundStatsForAcceptedWord(word, score, submittedPath, facesBefore);
-      if (roundStats.duplicateCleanWordThisRound) {
-        lifetimeStats = normalizeLifetimeStats(lifetimeStats);
-        lifetimeStats.twinWordsCreated = Math.max(lifetimeStats.twinWordsCreated, 1);
-      }
+
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.validWordsSubmitted += 1;
@@ -5903,6 +5983,7 @@ function randomVowel() {
       );
 
       showRoundRecap(recapSummary);
+      showAbandonPopup(recapSummary);
     });
 
     document.getElementById('cashOut').addEventListener('click', () => {
