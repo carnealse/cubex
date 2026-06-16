@@ -2647,6 +2647,13 @@ This little lady may come in handy someday. Only one way to find out.`,
       }).join('');
 
       const skinCards = Object.entries(CUBE_SKINS).map(([skinKey, skin]) => {
+
+
+        const owned = isSkinOwned(skinKey), vendorUnlocked = isVendorSkinUnlocked(skinKey), equipped = skinState.equipped === skinKey;
+        const status = owned ? (equipped ? 'Equipped. The cube is wearing this mistake right now.' : 'Owned. Available to equip.') : skin.type === 'vendor' ? (vendorUnlocked ? `Available in Vendor for ${skin.price.toLocaleString()} SlopCoin.` : `Locked. ${skin.requirement}`) : `Locked. ${skin.requirement}`;
+        return `<div class="journal-item ${owned ? '' : 'locked'}"><div class="achievement-journal-item">${skinSwatchHtml(skinKey)}<div><div class="achievement-topline"><div class="achievement-name">${skin.name}</div><div class="achievement-meta">${skin.type === 'vendor' ? 'Vendor Skin' : skin.type === 'achievement' ? 'Achievement Skin' : 'Default'}</div></div><div class="journal-item-body">${status}</div><div class="achievement-reward-line"><strong>Requirement:</strong> ${skin.requirement}</div></div></div></div>`;
+      }).join('');
+
       const effectCards = Object.entries(EFFECT_DEFINITIONS).map(([effectKey, effect]) => {
         const owned = isEffectOwned(effectKey);
         const vendorUnlocked = isVendorEffectUnlocked(effectKey);
@@ -2674,11 +2681,6 @@ This little lady may come in handy someday. Only one way to find out.`,
         `;
       }).join('');
 
-
-        const owned = isSkinOwned(skinKey), vendorUnlocked = isVendorSkinUnlocked(skinKey), equipped = skinState.equipped === skinKey;
-        const status = owned ? (equipped ? 'Equipped. The cube is wearing this mistake right now.' : 'Owned. Available to equip.') : skin.type === 'vendor' ? (vendorUnlocked ? `Available in Vendor for ${skin.price.toLocaleString()} SlopCoin.` : `Locked. ${skin.requirement}`) : `Locked. ${skin.requirement}`;
-        return `<div class="journal-item ${owned ? '' : 'locked'}"><div class="achievement-journal-item">${skinSwatchHtml(skinKey)}<div><div class="achievement-topline"><div class="achievement-name">${skin.name}</div><div class="achievement-meta">${skin.type === 'vendor' ? 'Vendor Skin' : skin.type === 'achievement' ? 'Achievement Skin' : 'Default'}</div></div><div class="journal-item-body">${status}</div><div class="achievement-reward-line"><strong>Requirement:</strong> ${skin.requirement}</div></div></div></div>`;
-      }).join('');
 
       journalStats.innerHTML = `
         <div class="journal-grid">
