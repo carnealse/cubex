@@ -6022,6 +6022,7 @@ function randomVowel() {
       if (!mainComplete) {
         setStatus('Cash Out denied. Finish the main contract first. This is not a DAO, you still have to do something.');
         updateScoreDisplay();
+        updateMissionDisplay();
         return;
       }
 
@@ -6031,7 +6032,7 @@ function randomVowel() {
 
       lifetimeStats = normalizeLifetimeStats(lifetimeStats);
       lifetimeStats.totalCashouts += 1;
-      lifetimeStats.lifetimeSlopCoinBanked += totalScore;
+      lifetimeStats.lifetimeSlopCoinBanked += cashedOut;
       lifetimeStats.gradeCounts[grade] = (lifetimeStats.gradeCounts[grade] || 0) + 1;
       if (mainComplete) lifetimeStats.contractsCompleted += 1;
       if (bonusComplete) lifetimeStats.bonusContractsCompleted += 1;
@@ -6051,8 +6052,7 @@ function randomVowel() {
       }
 
       if (grade === 'S+') {
-        const rewardCount = 1;
-        const rewardItemKey = addRandomUnlockedItem(rewardCount);
+        const rewardItemKey = addRandomUnlockedItem(1);
         rewardText += ` +1 ${INVENTORY_ITEMS[rewardItemKey].name} S+ reward.`;
       }
 
@@ -6065,7 +6065,7 @@ function randomVowel() {
         earned: roundStats.scoreEarned,
         spent: roundStats.slopCoinSpent,
         netProfit: roundStats.scoreEarned - roundStats.slopCoinSpent,
-        banked: totalScore,
+        banked: cashedOut,
         missionXP,
         mainComplete,
         bonusComplete,
@@ -6081,7 +6081,7 @@ function randomVowel() {
         hintsBought: { ...(roundStats.hintsBought || {}) }
       };
 
-      bankedScore += totalScore;
+      bankedScore += cashedOut;
       totalScore = 0;
 
       const shouldCelebrateFirstCashout = !hasSeenFirstCashout && bankedScore > 0;
@@ -6089,29 +6089,33 @@ function randomVowel() {
 
       triggerEffect('cashOut', { grade });
       checkAchievements();
+
       startFreshRound();
-      saveGame();
+
+      updateWordDisplay();
+      updateMissionDisplay();
       updateScoreDisplay();
+      updateVendorDisplay();
+      updateInventoryDisplay();
+      updateDailyDisplay();
+      saveGame();
+
       setStatus(
         `Cashed out ${cashedOut.toLocaleString()} SlopCoin. Grade ${grade}.${rewardText || ' Main contract complete, bonus ignored you back. Fresh cube loaded.'}`
       );
 
-      showRoundRecap(recapSummary);
-
-      if (shouldCelebrateFirstCashout) {
-        pendingRankUpCelebration = cashoutXPResult.ranksGained > 0
-          ? {
-              newRank: cashoutXPResult.newRank,
-              ranksGained: cashoutXPResult.ranksGained
-            }
-          : pendingRankUpCelebration;
-        pendingItemUnlockCelebrations.unshift('__FIRST_CASHOUT__');
-      } else if (cashoutXPResult.ranksGained > 0) {
+      if (cashoutXPResult.ranksGained > 0) {
         pendingRankUpCelebration = {
           newRank: cashoutXPResult.newRank,
           ranksGained: cashoutXPResult.ranksGained
         };
       }
+
+      if (shouldCelebrateFirstCashout) {
+        pendingItemUnlockCelebrations.unshift('__FIRST_CASHOUT__');
+      }
+
+      showRoundRecap(recapSummary);
     });
 
     document.getElementById('consonantPlus').addEventListener('click', () => {
