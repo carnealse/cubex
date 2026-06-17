@@ -974,7 +974,28 @@
     }
 
 
-  </style>
+  
+    .pet-body.pet-blink {
+      animation: chickenBlink .18s ease-in-out 1 !important;
+    }
+
+    .pet-body.pet-look-up {
+      animation: chickenLookUp 1.15s ease-in-out 1 !important;
+    }
+
+    @keyframes chickenBlink {
+      0%, 100% { transform: scaleY(1); filter: brightness(1); }
+      45%, 58% { transform: scaleY(.965); filter: brightness(.86); }
+    }
+
+    @keyframes chickenLookUp {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      22% { transform: translateY(-4px) rotate(-2deg); }
+      58% { transform: translateY(-5px) rotate(-2deg); }
+      80% { transform: translateY(0) rotate(1deg); }
+    }
+
+</style>
 </head>
 <body>
   <canvas id="effectOverlay" aria-hidden="true"></canvas>
@@ -3804,6 +3825,7 @@ function showRoundRecap(summary) {
       petState = normalizePetState(petState);
       const pet = PET_DEFINITIONS[petState.equipped];
       if (!pet) {
+        clearTimeout(petIdleTimer);
         petDock.classList.remove('visible');
         petDock.setAttribute('aria-hidden', 'true');
         return;
@@ -3820,9 +3842,12 @@ function showRoundRecap(summary) {
         void petBody.offsetWidth;
         petBody.classList.add('materialize');
       }
+
+      schedulePetIdleLife();
     }
 
     let petSpeechTimer = null;
+    let petIdleTimer = null;
 
     function clearPetSpeech() {
       if (!petSpeech) return;
@@ -3836,7 +3861,7 @@ function showRoundRecap(summary) {
       if (!petDock.classList.contains('visible')) return;
       petSpeech.textContent = text;
       petSpeech.classList.add('show');
-      petBody.classList.remove('happy', 'judge');
+      petBody.classList.remove('happy', 'judge', 'pet-blink', 'pet-look-up');
       void petBody.offsetWidth;
       petBody.classList.add(mood);
       clearTimeout(petSpeechTimer);
@@ -3870,6 +3895,36 @@ function showRoundRecap(summary) {
       ghost: ["She saw that too, right?", "Ghost detected. Coop security has been reduced to vibes.", "She clucks at the empty corner. The empty corner clucks back."],
       gold: ["Gold? The vendor just put on cologne.", "She does not trust shiny things unless they are corn-adjacent.", "Gold unlocked: emotional damage with reflectivity."]
     };
+
+
+    function schedulePetIdleLife() {
+      clearTimeout(petIdleTimer);
+
+      if (!isPetOwned('chicken')) return;
+
+      const delay = 3500 + Math.random() * 8500;
+
+      petIdleTimer = setTimeout(() => {
+        runPetIdleLife();
+        schedulePetIdleLife();
+      }, delay);
+    }
+
+    function runPetIdleLife() {
+      if (!isPetOwned('chicken')) return;
+      if (!petDock.classList.contains('visible')) return;
+
+      petBody.classList.remove('pet-blink', 'pet-look-up');
+
+      const animationClass = Math.random() < 0.68 ? 'pet-blink' : 'pet-look-up';
+      void petBody.offsetWidth;
+      petBody.classList.add(animationClass);
+
+      const duration = animationClass === 'pet-blink' ? 220 : 1250;
+      setTimeout(() => {
+        petBody.classList.remove(animationClass);
+      }, duration);
+    }
 
 function maybePetValidReaction(word) {
       if (!isPetOwned('chicken')) return;
