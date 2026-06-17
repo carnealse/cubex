@@ -995,18 +995,18 @@
     .pet-dock {
       right: 42px !important;
       bottom: 92px !important;
-      width: 260px !important;
-      min-height: 250px !important;
+      width: 299px !important;
+      min-height: 288px !important;
     }
 
     .pet-image {
-      width: 240px !important;
-      max-width: 240px !important;
+      width: 276px !important;
+      max-width: 276px !important;
       height: auto !important;
     }
 
     .pet-speech {
-      max-width: 245px !important;
+      max-width: 282px !important;
       font-size: .82rem !important;
     }
 
@@ -3935,7 +3935,7 @@ function showRoundRecap(summary) {
 
       if (!isPetOwned('chicken')) return;
 
-      const delay = 2800 + Math.random() * 7200;
+      const delay = 10000 + Math.random() * 20000;
       chickenBlinkTimer = setTimeout(() => {
         playChickenBlink();
         scheduleChickenBlink();
@@ -3950,7 +3950,10 @@ function showRoundRecap(summary) {
       clearTimeout(chickenBlinkFrameTimer);
 
       let frameIndex = 0;
+      let blinkCount = 0;
+      const totalBlinks = Math.random() < 0.35 ? 2 : 1;
       const frameDuration = 85;
+      const betweenBlinkPause = 180;
 
       function nextFrame() {
         petImage.src = CHICKEN_BLINK_FRAMES[frameIndex] || CHICKEN_BLINK_FRAMES[0];
@@ -3958,8 +3961,15 @@ function showRoundRecap(summary) {
 
         if (frameIndex < CHICKEN_BLINK_FRAMES.length) {
           chickenBlinkFrameTimer = setTimeout(nextFrame, frameDuration);
-        } else {
-          petImage.src = CHICKEN_BLINK_FRAMES[0];
+          return;
+        }
+
+        blinkCount += 1;
+        petImage.src = CHICKEN_BLINK_FRAMES[0];
+
+        if (blinkCount < totalBlinks) {
+          frameIndex = 0;
+          chickenBlinkFrameTimer = setTimeout(nextFrame, betweenBlinkPause);
         }
       }
 
