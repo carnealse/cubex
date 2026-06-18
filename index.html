@@ -995,18 +995,18 @@
     .pet-dock {
       right: 42px !important;
       bottom: 92px !important;
-      width: 299px !important;
-      min-height: 288px !important;
+      width: 450px !important;
+      min-height: 432px !important;
     }
 
     .pet-image {
-      width: 276px !important;
-      max-width: 276px !important;
+      width: 414px !important;
+      max-width: 414px !important;
       height: auto !important;
     }
 
     .pet-speech {
-      max-width: 282px !important;
+      max-width: 423px !important;
       font-size: .82rem !important;
     }
 
@@ -3935,7 +3935,7 @@ function showRoundRecap(summary) {
 
       if (!isPetOwned('chicken')) return;
 
-      const delay = 10000 + Math.random() * 20000;
+      const delay = 10000 + Math.random() * 35000;
       chickenBlinkTimer = setTimeout(() => {
         playChickenBlink();
         scheduleChickenBlink();
@@ -3951,7 +3951,7 @@ function showRoundRecap(summary) {
 
       let frameIndex = 0;
       let blinkCount = 0;
-      const totalBlinks = Math.random() < 0.35 ? 2 : 1;
+      const totalBlinks = Math.random() < 0.25 ? 2 : 1;
       const frameDuration = 85;
       const betweenBlinkPause = 180;
 
