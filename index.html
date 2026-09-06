@@ -889,9 +889,10 @@
 
     .pet-dock {
       position: fixed;
-      right: -50px;
+      right: 12px;
       bottom: 78px;
       width: 338px;
+      max-width: calc(100vw - 24px);
       min-height: 324px;
       z-index: 9;
       pointer-events: none;
@@ -1016,7 +1017,7 @@
       animation: chickenMaterialize .95s ease-out 1 !important;
     }
 .pet-speech {
-      max-width: 318px !important;
+      max-width: min(318px, calc(100vw - 40px)) !important;
     }
 
 
