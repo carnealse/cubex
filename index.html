@@ -481,6 +481,35 @@
       font-weight: 900;
       letter-spacing: .04em;
     }
+    .letter-picker-subtitle {
+      color: #9ba5b7;
+      font-size: 13px;
+      margin: 0 0 14px;
+    }
+    .letter-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .letter-picker-button {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: #242936;
+      color: #f3f5f9;
+      font-weight: 800;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .letter-picker-button:hover:not(:disabled) {
+      background: #323a4c;
+      border-color: rgba(255,255,255,.32);
+    }
+    .letter-picker-button:disabled {
+      opacity: .25;
+      cursor: not-allowed;
+    }
     .modal-close {
       width: 34px;
       height: 34px;
@@ -1531,6 +1560,18 @@
     </div>
   </div>
 
+  <div id="letterPickerModal" class="modal-backdrop" aria-hidden="true">
+    <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="letterPickerTitle">
+      <div class="modal-header">
+        <div id="letterPickerTitle" class="modal-title">Choose a Letter</div>
+        <button class="modal-close" data-close-modal aria-label="Cancel letter pick">×</button>
+      </div>
+      <p id="letterPickerSubtitle" class="letter-picker-subtitle"></p>
+      <div id="letterPickerGrid" class="letter-picker-grid"></div>
+      <button class="celebration-button" data-close-modal>Cancel</button>
+    </div>
+  </div>
+
   
   <div id="petDock" class="pet-dock" aria-hidden="true">
     <div id="petSpeech" class="pet-speech"></div>
@@ -1709,6 +1750,9 @@
     const itemUnlockName = document.getElementById('itemUnlockName');
     const itemUnlockDescription = document.getElementById('itemUnlockDescription');
     const itemUnlockUsage = document.getElementById('itemUnlockUsage');
+    const letterPickerModal = document.getElementById('letterPickerModal');
+    const letterPickerSubtitle = document.getElementById('letterPickerSubtitle');
+    const letterPickerGrid = document.getElementById('letterPickerGrid');
     const rankUpName = document.getElementById('rankUpName');
     const rankUpDescription = document.getElementById('rankUpDescription');
     const rankUpReward = document.getElementById('rankUpReward');
@@ -1769,17 +1813,17 @@
         name: 'Vowel Voucher',
         unlockRank: 3,
         vendorPrice: 120,
-        description: 'Add one random vowel to a blank space.',
+        description: 'Choose a specific vowel to add to a blank space.',
         discovery: 'You have acquired a Vowel Voucher, a coupon printed on paper so flimsy it already looks financially underwater.',
-        usage: 'Press I to open Inventory, click Vowel Voucher, and it instantly fills one blank ghost tile with a random vowel. It is not charity. It is sponsored vowel leakage.'
+        usage: 'Press I to open Inventory, click Vowel Voucher, then pick exactly which vowel goes into a blank ghost tile. Premium vowel selection, at a premium markup.'
       },
       consonantCoupon: {
         name: 'Consonant Coupon',
         unlockRank: 4,
         vendorPrice: 95,
-        description: 'Add one random consonant to a blank space.',
+        description: 'Choose a specific consonant to add to a blank space.',
         discovery: 'You received a Consonant Coupon. It smells like printer toner, regret, and a mall kiosk that definitely sells phone cases and tax advice.',
-        usage: 'Press I to open Inventory, click Consonant Coupon, and it instantly fills one blank ghost tile with a random consonant. Cheap labor, but alphabetic.'
+        usage: 'Press I to open Inventory, click Consonant Coupon, then pick exactly which consonant goes into a blank ghost tile. Cheap labor, but you are the foreman now.'
       },
       letterLeech: {
         name: 'Letter Leech',
@@ -2064,6 +2108,8 @@ const LETTER_VALUES = {
       firstSwappyPopModal.setAttribute('aria-hidden', 'true');
       itemUnlockModal.classList.remove('open');
       itemUnlockModal.setAttribute('aria-hidden', 'true');
+      letterPickerModal.classList.remove('open');
+      letterPickerModal.setAttribute('aria-hidden', 'true');
       effectUnlockModal.classList.remove('open');
       effectUnlockModal.setAttribute('aria-hidden', 'true');
       skinUnlockModal.classList.remove('open');
@@ -4354,38 +4400,77 @@ function addInventoryItem(itemKey, count = 1) {
       refreshStickerTexture(sticker);
     }
 
-    function useVowelVoucher() {
+    function openLetterPicker(type) {
       const blanks = blankStickers();
 
       if (!blanks.length) {
-        setStatus('Vowel Voucher rejected. There are no blank tiles. The vowel union refuses to work without an opening.');
-        return false;
+        setStatus(type === 'vowel'
+          ? 'Vowel Voucher rejected. There are no blank tiles. The vowel union refuses to work without an opening.'
+          : 'Consonant Coupon rejected. No blank tiles available. The coupon has been asked to sit down and stop making eye contact.');
+        return;
+      }
+
+      const validLetters = type === 'vowel' ? Object.keys(VOWEL_COUNTS) : Object.keys(CONSONANT_WEIGHTS);
+
+      letterPickerSubtitle.textContent = type === 'vowel'
+        ? 'Pick a vowel to drop into a blank space.'
+        : 'Pick a consonant to drop into a blank space.';
+
+      letterPickerGrid.innerHTML = '';
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'letter-picker-button';
+        button.textContent = letter;
+        const isValid = validLetters.includes(letter);
+        button.disabled = !isValid;
+        if (isValid) {
+          button.addEventListener('click', () => confirmLetterPick(type, letter));
+        }
+        letterPickerGrid.appendChild(button);
+      });
+
+      closeMenus();
+      letterPickerModal.classList.add('open');
+      letterPickerModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function confirmLetterPick(type, letter) {
+      const isVowel = Object.prototype.hasOwnProperty.call(VOWEL_COUNTS, letter);
+      if (type === 'vowel' && !isVowel) return;
+      if (type === 'consonant' && isVowel) return;
+
+      const blanks = blankStickers();
+      if (!blanks.length) {
+        closeMenus();
+        setStatus('The last blank tile got away. Nothing was spent.');
+        return;
       }
 
       const sticker = chooseRandomBlank(blanks);
-      fillBlankSticker(sticker, randomVowel(), 'item');
-      removeInventoryItem('vowelVoucher', 1);
+      fillBlankSticker(sticker, letter, 'item');
+
+      if (type === 'vowel') {
+        removeInventoryItem('vowelVoucher', 1);
+        setStatus(`Vowel Voucher used. You hand-picked ${letter} like a control freak. Respect.`);
+      } else {
+        removeInventoryItem('consonantCoupon', 1);
+        setStatus(`Consonant Coupon used. You hand-picked ${letter}. Somehow more suspicious than random.`);
+      }
+
       updateVendorDisplay();
       updateScoreDisplay();
-      setStatus('Vowel Voucher used. One random vowel crawled into a blank space and is pretending it belongs there.');
-      return true;
+      closeMenus();
+    }
+
+    function useVowelVoucher() {
+      openLetterPicker('vowel');
+      return false;
     }
 
     function useConsonantCoupon() {
-      const blanks = blankStickers();
-
-      if (!blanks.length) {
-        setStatus('Consonant Coupon rejected. No blank tiles available. The coupon has been asked to sit down and stop making eye contact.');
-        return false;
-      }
-
-      const sticker = chooseRandomBlank(blanks);
-      fillBlankSticker(sticker, randomConsonant(), 'item');
-      removeInventoryItem('consonantCoupon', 1);
-      updateVendorDisplay();
-      updateScoreDisplay();
-      setStatus('Consonant Coupon used. One discount consonant has entered the workforce.');
-      return true;
+      openLetterPicker('consonant');
+      return false;
     }
 
     function activateLetterLeech() {
@@ -4486,12 +4571,12 @@ function addInventoryItem(itemKey, count = 1) {
       }
 
       if (itemKey === 'vowelVoucher') {
-        if (useVowelVoucher()) closeMenus();
+        useVowelVoucher();
         return;
       }
 
       if (itemKey === 'consonantCoupon') {
-        if (useConsonantCoupon()) closeMenus();
+        useConsonantCoupon();
         return;
       }
 
