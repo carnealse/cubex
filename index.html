@@ -5031,6 +5031,9 @@ function addInventoryItem(itemKey, count = 1) {
       }
     }
 
+    const SKIP_LOGIN_KEY = 'cubex-skip-login';
+    const PRODUCTION_URL = 'https://cubex-livid.vercel.app';
+
     function dismissLoginOverlay() {
       const overlay = document.getElementById('loginOverlay');
       if (overlay) overlay.style.display = 'none';
@@ -5039,18 +5042,22 @@ function addInventoryItem(itemKey, count = 1) {
     async function signInWithGoogle() {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.href }
+        options: { redirectTo: PRODUCTION_URL }
       });
     }
 
     async function signOut() {
       await supabase.auth.signOut();
+      localStorage.removeItem(SKIP_LOGIN_KEY);
     }
 
     document.getElementById('authSignInButton').addEventListener('click', signInWithGoogle);
     document.getElementById('authSignOutButton').addEventListener('click', signOut);
     document.getElementById('loginGoogleBtn').addEventListener('click', signInWithGoogle);
-    document.getElementById('loginPlayBtn').addEventListener('click', dismissLoginOverlay);
+    document.getElementById('loginPlayBtn').addEventListener('click', () => {
+      localStorage.setItem(SKIP_LOGIN_KEY, '1');
+      dismissLoginOverlay();
+    });
 
     supabase.auth.onAuthStateChange((event, session) => {
       currentUser = session?.user || null;
@@ -5058,6 +5065,8 @@ function addInventoryItem(itemKey, count = 1) {
       if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         dismissLoginOverlay();
         syncOnLogin();
+      } else if (event === 'INITIAL_SESSION' && !session && localStorage.getItem(SKIP_LOGIN_KEY) === '1') {
+        dismissLoginOverlay();
       }
     });
 
