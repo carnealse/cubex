@@ -1023,7 +1023,8 @@
     .profile-widget {
       position: fixed;
       top: 18px;
-      right: 190px;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 50;
       font-family: inherit;
     }
@@ -1047,7 +1048,8 @@
     .profile-dropdown {
       position: absolute;
       top: 46px;
-      right: 0;
+      left: 50%;
+      transform: translateX(-50%);
       width: 240px;
       padding: 12px;
       border-radius: 10px;
@@ -1157,7 +1159,7 @@
 
   <canvas id="effectOverlay" aria-hidden="true"></canvas>
 
-  <div class="profile-widget">
+  <div id="profileWidget" class="profile-widget">
     <button id="profileButton" class="profile-icon-button" type="button" aria-label="Account">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="8" r="4"></circle>
@@ -5064,6 +5066,23 @@ function addInventoryItem(itemKey, count = 1) {
         signedInView.style.display = 'none';
       }
     }
+
+    function positionProfileWidget() {
+      const widget = document.getElementById('profileWidget');
+      const wordPanel = document.querySelector('.word-panel');
+      const scorePanel = document.querySelector('.score-panel');
+      if (!widget || !wordPanel || !scorePanel) return;
+      const wordRect = wordPanel.getBoundingClientRect();
+      const scoreRect = scorePanel.getBoundingClientRect();
+      const midX = (wordRect.right + scoreRect.left) / 2;
+      const midY = (wordRect.top + scoreRect.top) / 2;
+      widget.style.left = midX + 'px';
+      widget.style.top = midY + 'px';
+    }
+
+    window.addEventListener('resize', positionProfileWidget);
+    window.addEventListener('load', positionProfileWidget);
+    positionProfileWidget();
 
     function toggleProfileDropdown(forceState) {
       const dropdown = document.getElementById('profileDropdown');
