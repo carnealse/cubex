@@ -5130,7 +5130,9 @@ function addInventoryItem(itemKey, count = 1) {
       const cloudSave = await fetchCloudSave();
       if (cloudSave) {
         applySaveObject(cloudSave);
+        backfillMissingAchievementSkins();
         localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveObject()));
+        queueCloudSync(buildSaveObject());
         applyEquippedSkin();
         updatePetDisplay();
         updateRankDisplay();
