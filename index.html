@@ -1020,50 +1020,66 @@
     }
 
 
-    .auth-panel {
+    .profile-widget {
       position: fixed;
-      top: 12px;
-      right: 12px;
+      top: 18px;
+      right: 190px;
       z-index: 50;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
       font-family: inherit;
     }
-    .auth-signin-button, .auth-signout-button {
-      background: rgba(20,20,28,0.85);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.25);
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .auth-signin-button:hover, .auth-signout-button:hover {
-      background: rgba(40,40,55,0.9);
-    }
-    .auth-user-box {
+    .profile-icon-button {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(20,23,30,.88);
+      border: 1px solid rgba(255,255,255,.18);
+      color: #dbe2ee;
       display: flex;
       align-items: center;
-      gap: 8px;
-      background: rgba(20,20,28,0.85);
-      border: 1px solid rgba(255,255,255,0.25);
-      border-radius: 6px;
-      padding: 4px 10px;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
     }
-    .auth-user-label {
+    .profile-icon-button:hover {
+      background: rgba(40,44,55,.92);
+      color: #fff;
+    }
+    .profile-dropdown {
+      position: absolute;
+      top: 46px;
+      right: 0;
+      width: 240px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(20,23,30,.96);
+      backdrop-filter: blur(10px);
+    }
+    .profile-dropdown-note, .profile-dropdown-email {
+      color: #dbe2ee;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .profile-dropdown-button {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(255,255,255,.06);
       color: #fff;
       font-size: 13px;
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-weight: 700;
+      cursor: pointer;
     }
-    .auth-sync-status {
-      color: rgba(255,255,255,0.6);
+    .profile-dropdown-button:hover {
+      background: rgba(255,255,255,.12);
+    }
+    .profile-dropdown-hint {
+      margin-top: 8px;
       font-size: 11px;
-      min-height: 14px;
+      color: #8b93a3;
+      line-height: 1.4;
     }
 
     #loginOverlay {
@@ -1119,6 +1135,14 @@
       color: #fff;
       border-color: rgba(255,255,255,0.45);
     }
+    .login-note {
+      max-width: 300px;
+      color: rgba(255,255,255,0.35);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 4px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -1128,17 +1152,29 @@
     <button id="loginGoogleBtn" class="login-btn-google" type="button">Sign in with Google</button>
     <div class="login-divider">or</div>
     <button id="loginPlayBtn" class="login-btn-play" type="button">Just Play</button>
+    <div class="login-note">Just Play saves progress to this device only. It won't sync to an online profile.</div>
   </div>
 
   <canvas id="effectOverlay" aria-hidden="true"></canvas>
 
-  <div id="authPanel" class="auth-panel">
-    <button id="authSignInButton" class="auth-signin-button" type="button">Sign in with Google</button>
-    <div id="authUserBox" class="auth-user-box" style="display:none;">
-      <span id="authUserLabel" class="auth-user-label"></span>
-      <button id="authSignOutButton" class="auth-signout-button" type="button">Sign out</button>
+  <div class="profile-widget">
+    <button id="profileButton" class="profile-icon-button" type="button" aria-label="Account">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="4"></circle>
+        <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"></path>
+      </svg>
+    </button>
+    <div id="profileDropdown" class="profile-dropdown" style="display:none;">
+      <div id="profileSignedOutView">
+        <div class="profile-dropdown-note">Playing locally</div>
+        <button id="profileSignInButton" class="profile-dropdown-button" type="button">Sign in with Google</button>
+        <div class="profile-dropdown-hint">Signing in will save this device's progress to your account (only if your account has no save yet).</div>
+      </div>
+      <div id="profileSignedInView" style="display:none;">
+        <div id="profileEmailLabel" class="profile-dropdown-email"></div>
+        <button id="profileSignOutButton" class="profile-dropdown-button" type="button">Sign out</button>
+      </div>
     </div>
-    <div id="authSyncStatus" class="auth-sync-status"></div>
   </div>
   <div class="word-panel">
     <div class="word-label">Selected Word</div>
@@ -4943,9 +4979,8 @@ function addInventoryItem(itemKey, count = 1) {
       }
     }
 
-    function setAuthSyncStatus(text) {
-      const el = document.getElementById('authSyncStatus');
-      if (el) el.textContent = text || '';
+    function setAuthSyncStatus() {
+      /* no-op: sync status no longer shown in UI */
     }
 
     function queueCloudSync(save) {
@@ -5017,19 +5052,32 @@ function addInventoryItem(itemKey, count = 1) {
     }
 
     function updateAuthUI() {
-      const signInButton = document.getElementById('authSignInButton');
-      const userBox = document.getElementById('authUserBox');
-      const userLabel = document.getElementById('authUserLabel');
+      const signedOutView = document.getElementById('profileSignedOutView');
+      const signedInView = document.getElementById('profileSignedInView');
+      const emailLabel = document.getElementById('profileEmailLabel');
       if (currentUser) {
-        signInButton.style.display = 'none';
-        userBox.style.display = 'flex';
-        userLabel.textContent = currentUser.email || currentUser.user_metadata?.full_name || 'Signed in';
+        signedOutView.style.display = 'none';
+        signedInView.style.display = 'block';
+        emailLabel.textContent = currentUser.email || currentUser.user_metadata?.full_name || 'Signed in';
       } else {
-        signInButton.style.display = 'none';
-        userBox.style.display = 'none';
-        setAuthSyncStatus('');
+        signedOutView.style.display = 'block';
+        signedInView.style.display = 'none';
       }
     }
+
+    function toggleProfileDropdown(forceState) {
+      const dropdown = document.getElementById('profileDropdown');
+      const isOpen = dropdown.style.display === 'block';
+      const next = forceState !== undefined ? forceState : !isOpen;
+      dropdown.style.display = next ? 'block' : 'none';
+    }
+
+    document.getElementById('profileButton').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleProfileDropdown();
+    });
+    document.getElementById('profileDropdown').addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => toggleProfileDropdown(false));
 
     const SKIP_LOGIN_KEY = 'cubex-skip-login';
     const PRODUCTION_URL = 'https://cubex-livid.vercel.app';
@@ -5051,8 +5099,14 @@ function addInventoryItem(itemKey, count = 1) {
       localStorage.removeItem(SKIP_LOGIN_KEY);
     }
 
-    document.getElementById('authSignInButton').addEventListener('click', signInWithGoogle);
-    document.getElementById('authSignOutButton').addEventListener('click', signOut);
+    document.getElementById('profileSignInButton').addEventListener('click', () => {
+      toggleProfileDropdown(false);
+      signInWithGoogle();
+    });
+    document.getElementById('profileSignOutButton').addEventListener('click', () => {
+      toggleProfileDropdown(false);
+      signOut();
+    });
     document.getElementById('loginGoogleBtn').addEventListener('click', signInWithGoogle);
     document.getElementById('loginPlayBtn').addEventListener('click', () => {
       localStorage.setItem(SKIP_LOGIN_KEY, '1');
