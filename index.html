@@ -888,6 +888,11 @@
       border-color: rgba(103,190,255,.35);
       background: rgba(103,190,255,.07);
     }
+    .effect-card > div:last-child {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
 
     .effect-icon-box {
       width: 52px;
@@ -5491,7 +5496,8 @@ function addInventoryItem(itemKey, count = 1) {
           </div>
           <div>
             ${owned
-              ? `<button data-equip-effect="${effectKey}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>`
+              ? `<button data-equip-effect="${effectKey}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>
+                 ${equipped ? `<button data-unequip-effect="${effect.slot}">Unequip</button>` : ''}`
               : effect.type === 'vendor' && vendorUnlocked
                 ? `<button data-buy-effect="${effectKey}" ${canBuy ? '' : 'disabled'}>Buy</button>`
                 : `<button disabled>${effect.type === 'achievement' ? 'Earn' : 'Locked'}</button>`}
@@ -6959,6 +6965,21 @@ document.querySelectorAll('[data-journal-tab]').forEach(button => {
         updateJournalDisplay();
         saveGame();
         setStatus(`${effect.name} equipped in the ${effect.slot} slot. The cube has gained a layer of theater.`);
+        return;
+      }
+
+      const unequipButton = event.target.closest('[data-unequip-effect]');
+      if (unequipButton) {
+        const slot = unequipButton.dataset.unequipEffect;
+        effectState = normalizeEffectState(effectState);
+        const removed = effectDefinition(effectState.equipped[slot] || '');
+        effectState.equipped[slot] = '';
+        if (slot === 'ambient') initAmbientState();
+
+        updateVendorDisplay();
+        updateJournalDisplay();
+        saveGame();
+        setStatus(`${removed?.name || 'Effect'} unequipped from the ${slot} slot. Back to the theater's default disappointing lighting.`);
       }
     });
 
