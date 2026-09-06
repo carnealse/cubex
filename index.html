@@ -1065,9 +1065,71 @@
       font-size: 11px;
       min-height: 14px;
     }
+
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: #0d0d12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .login-title {
+      font-size: 52px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -2px;
+      margin-bottom: 4px;
+    }
+    .login-sub {
+      color: rgba(255,255,255,0.45);
+      font-size: 15px;
+      margin-bottom: 16px;
+    }
+    .login-btn-google {
+      background: #fff;
+      color: #111;
+      border: none;
+      border-radius: 8px;
+      padding: 13px 32px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .login-btn-google:hover { background: #e8e8e8; }
+    .login-divider {
+      color: rgba(255,255,255,0.3);
+      font-size: 13px;
+    }
+    .login-btn-play {
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 11px 28px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .login-btn-play:hover {
+      color: #fff;
+      border-color: rgba(255,255,255,0.45);
+    }
   </style>
 </head>
 <body>
+  <div id="loginOverlay">
+    <div class="login-title">CubeX</div>
+    <div class="login-sub">A word game on a Rubik's cube</div>
+    <button id="loginGoogleBtn" class="login-btn-google" type="button">Sign in with Google</button>
+    <div class="login-divider">or</div>
+    <button id="loginPlayBtn" class="login-btn-play" type="button">Just Play</button>
+  </div>
+
   <canvas id="effectOverlay" aria-hidden="true"></canvas>
 
   <div id="authPanel" class="auth-panel">
@@ -4963,10 +5025,15 @@ function addInventoryItem(itemKey, count = 1) {
         userBox.style.display = 'flex';
         userLabel.textContent = currentUser.email || currentUser.user_metadata?.full_name || 'Signed in';
       } else {
-        signInButton.style.display = 'inline-block';
+        signInButton.style.display = 'none';
         userBox.style.display = 'none';
         setAuthSyncStatus('');
       }
+    }
+
+    function dismissLoginOverlay() {
+      const overlay = document.getElementById('loginOverlay');
+      if (overlay) overlay.style.display = 'none';
     }
 
     async function signInWithGoogle() {
@@ -4982,11 +5049,14 @@ function addInventoryItem(itemKey, count = 1) {
 
     document.getElementById('authSignInButton').addEventListener('click', signInWithGoogle);
     document.getElementById('authSignOutButton').addEventListener('click', signOut);
+    document.getElementById('loginGoogleBtn').addEventListener('click', signInWithGoogle);
+    document.getElementById('loginPlayBtn').addEventListener('click', dismissLoginOverlay);
 
     supabase.auth.onAuthStateChange((event, session) => {
       currentUser = session?.user || null;
       updateAuthUI();
       if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        dismissLoginOverlay();
         syncOnLogin();
       }
     });
