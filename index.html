@@ -1909,7 +1909,8 @@
       corporateBeige: { name:'Corporate Beige', type:'achievement', icon:'🗂️', requirement:'Earn 10 A grades.', unlockText:'Skin Unlocked:\nCorporate Beige!\n\nYou earned enough A grades to qualify for the most dangerous reward in the workplace: being considered reliable.\n\nThe cube has been repainted in the official colors of meetings that should have been emails.', colors:{ right:0xc8bca4,left:0xb8aa90,top:0xf1eadc,bottom:0x8a8274,front:0xd7cfbd,back:0x9c927e,inside:0x090806 }, textColor:'#171511' },
       noirPhase: { name:'Noir Phase', type:'achievement', icon:'🎞️', requirement:'Make ten 7-letter words.', unlockText:'Skin Unlocked:\nNoir Phase!\n\nThe cube has entered black-and-white mode because apparently even geometry goes through a goth phase.\n\nEvery letter now looks like it knows something, but refuses to testify.', colors:{ right:0x0d0d0f,left:0x2c2c31,top:0xf1f1f1,bottom:0x55555f,front:0xb8b8c1,back:0x17171d,inside:0x050507 }, textColor:'#f4f4f4' },
       voidCube: { name:'Void Cube', type:'achievement', icon:'🕳️', requirement:'Clear 10 full faces lifetime.', unlockText:'Skin Unlocked:\nVoid Cube!\n\nYou cleared enough cube faces that the remaining colors started asking if existence was optional.\n\nThe cube has been dipped in premium nothingness. Do not stare too long. It stares back with excellent posture.', colors:{ right:0x050509,left:0x101018,top:0x232337,bottom:0x000000,front:0x151525,back:0x080810,inside:0x000000 }, textColor:'#f4f4f4' },
-      platinumCube: { name:'Platinum Cube', type:'achievement', icon:'💿', requirement:'Reach Rank 50.', unlockText:'Skin Unlocked:\nPlatinum Cube!\n\nYou reached the final rank, which means you have converted time, stubbornness, and questionable judgment into a shiny object.\n\nThe cube has awarded you platinum status. This does not include lounge access, dental coverage, or emotional closure.', colors:{ right:0xe5e9f0,left:0xbec7d4,top:0xffffff,bottom:0x8f9aaa,front:0xd9dee8,back:0xaeb8c8,inside:0x08090b }, textColor:'#10131a' }
+      platinumCube: { name:'Platinum Cube', type:'achievement', icon:'💿', requirement:'Reach Rank 50.', unlockText:'Skin Unlocked:\nPlatinum Cube!\n\nYou reached the final rank, which means you have converted time, stubbornness, and questionable judgment into a shiny object.\n\nThe cube has awarded you platinum status. This does not include lounge access, dental coverage, or emotional closure.', colors:{ right:0xe5e9f0,left:0xbec7d4,top:0xffffff,bottom:0x8f9aaa,front:0xd9dee8,back:0xaeb8c8,inside:0x08090b }, textColor:'#10131a' },
+      complianceHazard: { name:'Compliance Hazard', type:'achievement', icon:'⚠️', requirement:'Earn 3 S+ grades.', unlockText:'Skin Unlocked:\nCompliance Hazard!\n\nThree S+ grades triggered an automatic OSHA review, and the cube failed it in a way that impressed everyone.\n\nIt has been repainted in official hazard yellow and black, laminated, and bolted to the wall next to a fire extinguisher nobody has ever checked.', colors:{ right:0xffcc00,left:0x1a1a1a,top:0xffcc00,bottom:0x1a1a1a,front:0xff6a00,back:0x1a1a1a,inside:0x0a0a0a }, textColor:'#fefefe' }
     };
 
     
@@ -7306,10 +7307,28 @@ addEventListener('resize', () => {
       renderEffectsOverlay();
     }
 
+    function backfillMissingAchievementSkins() {
+      lifetimeStats = normalizeLifetimeStats(lifetimeStats);
+      skinState = normalizeSkinState(skinState);
+
+      ACHIEVEMENT_DEFINITIONS.forEach(achievement => {
+        if (!achievementUnlocked(achievement.id)) return;
+
+        (achievement.rewards || []).forEach(reward => {
+          if (reward.type !== 'skin') return;
+          const skinEntry = Object.entries(CUBE_SKINS).find(([, skin]) => skin.name === reward.name);
+          if (skinEntry && !skinState.owned[skinEntry[0]]) {
+            awardAchievementSkin(skinEntry[0]);
+          }
+        });
+      });
+    }
+
     async function bootGame() {
       await loadExternalWordLists();
 
       loadGame();
+      backfillMissingAchievementSkins();
       applyEquippedSkin();
       effectState = normalizeEffectState(effectState);
       petState = normalizePetState(petState);
@@ -7327,6 +7346,8 @@ addEventListener('resize', () => {
       loadDailyChallenges();
       updateCamera();
       animate();
+      saveGame();
+      showPendingCelebration();
     }
 
     bootGame();
