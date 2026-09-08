@@ -5931,8 +5931,8 @@ function randomVowel() {
       cubie.userData.stickers.forEach(sticker => orientSticker(cubie, sticker));
     }
 
-    function skinColorForFace(faceKey) { const skin = skinDefinition(skinState?.equipped || 'classic'); return (skin.colors && skin.colors[faceKey]) || COLOR[faceKey] || COLOR.front; }
-    function applyEquippedSkin() { skinState = normalizeSkinState(skinState); stickers.forEach(sticker => { sticker.userData.faceKey = sticker.userData.faceKey || faceKeyFromNormal(sticker.userData.localNormal); sticker.userData.color = skinColorForFace(sticker.userData.faceKey); refreshStickerTexture(sticker); }); cubies.forEach(cubie => { if (cubie.material) { cubie.material.color.setHex(skinDefinition(skinState.equipped).colors?.inside || COLOR.inside); cubie.material.needsUpdate = true; } }); }
+    function skinColorForFace(faceKey) { const skin = skinDefinition(skinState?.equipped || 'classic'); return skin?.colors?.[faceKey] ?? COLOR[faceKey] ?? COLOR.front; }
+    function applyEquippedSkin() { skinState = normalizeSkinState(skinState); stickers.forEach(sticker => { sticker.userData.faceKey = sticker.userData.faceKey || faceKeyFromNormal(sticker.userData.localNormal); sticker.userData.color = skinColorForFace(sticker.userData.faceKey); refreshStickerTexture(sticker); }); cubies.forEach(cubie => { if (cubie.material) { cubie.material.color.setHex(skinDefinition(skinState.equipped).colors?.inside ?? COLOR.inside); cubie.material.needsUpdate = true; } }); }
 
     function createSticker(cubie, normal, color) {
       const geometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
